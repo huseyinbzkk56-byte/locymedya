@@ -8,17 +8,23 @@ export default function Layout({ title, children }) {
   const user = getCurrentUser();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
+  const isCompanyAdmin = user?.role === 'admin' && user?.adminScope === 'company';
+
   useEffect(() => {
-    if (user?.role !== 'admin') return;
+    if (user?.role !== 'admin' || isCompanyAdmin) return;
     apiFetch('/contact/unread-count').then((data) => setUnreadMessages(data.unreadCount)).catch(() => {});
   }, [user?.role, location.pathname]);
 
   const menus = {
     admin: [
       ['Dashboard', '/admin'], ['Projeler', '/admin/projects'], ['Rap Medyaları', '/admin/rap-media'],
-      ['Influencerlar', '/admin/influencers'], ['Kullanıcılar', '/admin/users'], ['Şarkılar', '/admin/songs'],
-      ['Videolar', '/admin/videos'], ['Raporlar', '/admin/reports'], ['Ödemeler', '/admin/payments'],
-      ['Ödeme Kuralları', '/admin/payment-rules'], ['Link Listesi', '/admin/links'], ['İletişim Mesajları', '/admin/contact-messages'], ['Ayarlar', '/admin/profile']
+      ['Influencerlar', '/admin/influencers'], ['Kullanıcılar', '/admin/users'],
+      ...(isCompanyAdmin ? [] : [['Şarkılar', '/admin/songs']]),
+      ['Videolar', '/admin/videos'], ['Raporlar', '/admin/reports'],
+      ...(isCompanyAdmin ? [] : [['Ödemeler', '/admin/payments'], ['Ödeme Kuralları', '/admin/payment-rules']]),
+      ['Link Listesi', '/admin/links'],
+      ...(isCompanyAdmin ? [] : [['İletişim Mesajları', '/admin/contact-messages']]),
+      ['Ayarlar', '/admin/profile']
     ],
     influencer: [['Dashboard', '/influencer'], ['Projelerim', '/influencer/projects'], ['Videolarım', '/influencer/videos'], ['Ödeme Geçmişim', '/influencer'], ['Profil', '/influencer/profile']],
     rapmedia: [['Dashboard', '/rap-media'], ['Atanan Projeler', '/rap-media/projects'], ['Görevler', '/rap-media/projects'], ['Link Ekle', '/rap-media/links'], ['Profil', '/rap-media/profile']]

@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { rateLimit } = require('../middleware/rate-limit');
 
 const router = express.Router();
@@ -39,8 +39,8 @@ router.post('/', rateLimit({ windowMs: 10 * 60 * 1000, max: 5 }), (req, res) => 
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
-// Bundan sonrası sadece admin
-router.use(authenticate, requireRole('admin'));
+// Bundan sonrası sadece tam yetkili admin
+router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
 router.get('/', (req, res) => {
   const messages = db.prepare('SELECT * FROM contact_messages ORDER BY created_at DESC, id DESC').all();

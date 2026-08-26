@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { apiFetch } from '../api/client';
+import { apiFetch, getCurrentUser } from '../api/client';
 
 const EMPTY = { name: '', username: '', password: '', phone: '', instagramUrl: '', tiktokUrl: '', xUrl: '', desiredFee: '', active: true, projectIds: [] };
 
@@ -12,6 +12,7 @@ export default function AdminMembers({ kind, title }) {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(null);
   const isInfluencer = kind === 'influencers';
+  const isCompanyAdmin = getCurrentUser()?.adminScope === 'company';
 
   async function load() { setUsers((await apiFetch(`/admin-members/${kind}`)).users); }
   useEffect(() => {
@@ -76,7 +77,7 @@ export default function AdminMembers({ kind, title }) {
         <h1 className="text-3xl font-semibold">{title}</h1>
         <p className="mt-2 text-sm text-gray-500">Bu panel yalnızca {isInfluencer ? 'influencer' : 'rap medya'} kullanıcılarını yönetir.</p>
 
-        <form onSubmit={submit} className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        {!isCompanyAdmin && <form onSubmit={submit} className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <input required name="name" value={form.name} onChange={update} placeholder={isInfluencer ? 'Influencer hesap adı' : 'Rap medya adı'} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm" />
             <input required disabled={Boolean(editing)} name="username" value={form.username} onChange={update} placeholder="Kullanıcı adı" className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-100" />
@@ -120,7 +121,7 @@ export default function AdminMembers({ kind, title }) {
             <button className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white">{editing ? 'Güncelle' : 'Ekle'}</button>
             {editing && <button type="button" onClick={resetForm} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm">Vazgeç</button>}
           </div>
-        </form>
+        </form>}
 
         <div className="mt-6 space-y-2">
           {users.map((user) => (
@@ -132,11 +133,11 @@ export default function AdminMembers({ kind, title }) {
                   <p className="mt-1 text-xs text-gray-400">{new Date(user.created_at).toLocaleDateString('tr-TR')}{isInfluencer && user.desired_fee !== null ? ` · ${user.desired_fee} TL/video` : ''}</p>
                   {user.projects?.length > 0 && <p className="mt-1 text-xs text-gray-500">Projeler: {user.projects.map((p) => p.name).join(', ')}</p>}
                 </div>
-                <div className="flex flex-wrap gap-3 text-sm">
+                {!isCompanyAdmin && <div className="flex flex-wrap gap-3 text-sm">
                   <button onClick={() => edit(user)} className="text-gray-600">Düzenle</button>
                   <button onClick={() => resetPassword(user)} className="text-gray-600">Şifre sıfırla</button>
                   <button onClick={() => remove(user)} className="text-red-500">Sil</button>
-                </div>
+                </div>}
               </div>
             </article>
           ))}

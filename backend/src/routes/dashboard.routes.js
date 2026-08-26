@@ -20,6 +20,10 @@ const LATEST_ACTIVE_VIEWS_SQL = `
 
 router.get('/admin', authenticate, requireRole('admin'), (req, res) => {
   const totalViews = db.prepare(LATEST_ACTIVE_VIEWS_SQL).get().total;
+  // Şirket hesabı (kısıtlı admin) kazanç yerine henüz ödenmemiş (bekleyen) tutarı görür
+  const earningsFigure = req.user.adminScope === 'company'
+    ? db.prepare("SELECT COALESCE(SUM(amount),0) c FROM payments WHERE status = 'pending'").get().c
+    : calculateEarning(totalViews);
   res.json({
     activeProjects: db.prepare("SELECT COUNT(*) c FROM projects WHERE status = 'active'").get().c,
     completedProjects: db.prepare("SELECT COUNT(*) c FROM projects WHERE status = 'completed'").get().c,
@@ -29,7 +33,7 @@ router.get('/admin', authenticate, requireRole('admin'), (req, res) => {
     totalVideos: db.prepare("SELECT COUNT(*) c FROM videos WHERE status = 'active'").get().c,
     totalViews,
     totalPaid: db.prepare("SELECT COALESCE(SUM(amount),0) c FROM payments WHERE status = 'paid'").get().c,
-    estimatedEarnings: calculateEarning(totalViews)
+    estimatedEarnings: earningsFigure
   });
 });
 

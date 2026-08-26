@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const STATUSES = new Set(['draft', 'active', 'completed', 'cancelled']);
@@ -58,7 +58,7 @@ router.get('/:id', requireRole('admin'), (req, res) => {
   res.json({ project });
 });
 
-router.post('/', requireRole('admin'), (req, res) => {
+router.post('/', requireRole('admin'), requireFullAdmin, (req, res) => {
   const { name, artistName, songName, startDate, endDate, status = 'draft', budget, coverUrl, description, publicUrl, showOnHome, influencerIds = [], mediaAccountIds = [] } = req.body;
   if (!name || !artistName?.trim() || !songName?.trim() || !STATUSES.has(status)) return res.status(400).json({ error: 'Proje adı, sanatçı adı, şarkı adı ve geçerli durum zorunlu' });
   const create = db.transaction(() => {
@@ -73,7 +73,7 @@ router.post('/', requireRole('admin'), (req, res) => {
   res.status(201).json({ project: projectWithAssignments(create()) });
 });
 
-router.put('/:id', requireRole('admin'), (req, res) => {
+router.put('/:id', requireRole('admin'), requireFullAdmin, (req, res) => {
   const { name, artistName, songName, startDate, endDate, status, budget, coverUrl, description, publicUrl, showOnHome, influencerIds = [], mediaAccountIds = [] } = req.body;
   if (!name || !artistName?.trim() || !songName?.trim() || !STATUSES.has(status)) return res.status(400).json({ error: 'Proje adı, sanatçı adı, şarkı adı ve geçerli durum zorunlu' });
   const update = db.transaction(() => {
@@ -91,7 +91,7 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   res.json({ project: projectWithAssignments(req.params.id) });
 });
 
-router.delete('/:id', requireRole('admin'), (req, res) => {
+router.delete('/:id', requireRole('admin'), requireFullAdmin, (req, res) => {
   const result = db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Proje bulunamadı' });
   res.status(204).end();

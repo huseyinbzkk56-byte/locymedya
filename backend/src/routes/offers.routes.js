@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { getPdfHeaderTitle, getPdfHeaderSubtitle } = require('../utils/settings');
 
 const router = express.Router();
@@ -127,7 +127,7 @@ router.get('/public/:token', (req, res) => {
 });
 
 // ---- Bundan sonrası sadece admin ----
-router.use(authenticate, requireRole('admin'));
+router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
 router.get('/', (req, res) => {
   const offers = db.prepare(

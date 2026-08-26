@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { apiFetch } from '../api/client';
-
-const CARD_LABELS = {
-  activeProjects: 'Aktif PR Projesi',
-  completedProjects: 'Tamamlanan Proje',
-  totalInfluencers: 'Influencer',
-  totalMediaAccounts: 'Rap Medya Hesabı',
-  totalArtists: 'Sanatçı',
-  totalVideos: 'Aktif Video/Link',
-  totalViews: 'Toplam İzlenme',
-  totalPaid: 'Yapılan Ödeme (TL)',
-  estimatedEarnings: 'Tahmini Kazanç (TL)'
-};
+import { apiFetch, getCurrentUser } from '../api/client';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
+  const isCompanyAdmin = getCurrentUser()?.adminScope === 'company';
+
+  const CARD_LABELS = {
+    activeProjects: 'Aktif PR Projesi',
+    completedProjects: 'Tamamlanan Proje',
+    totalInfluencers: 'Influencer',
+    totalMediaAccounts: 'Rap Medya Hesabı',
+    totalArtists: 'Sanatçı',
+    totalVideos: 'Aktif Video/Link',
+    totalViews: 'Toplam İzlenme',
+    totalPaid: 'Yapılan Ödeme (TL)',
+    estimatedEarnings: isCompanyAdmin ? 'Yapılacak Ödeme (TL)' : 'Tahmini Kazanç (TL)'
+  };
 
   useEffect(() => {
     apiFetch('/dashboard/admin').then(setStats).catch((e) => setError(e.message));

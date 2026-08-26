@@ -1,9 +1,9 @@
 const express = require('express');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { getViewPaymentRate, setViewPaymentRate } = require('../utils/settings');
 
 const router = express.Router();
-router.use(authenticate, requireRole('admin'));
+router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
 router.get('/', (req, res) => {
   res.json({ ratePerView: getViewPaymentRate() });

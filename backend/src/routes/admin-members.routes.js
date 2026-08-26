@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { hashPassword } = require('../utils/password');
 
 const router = express.Router();
@@ -31,7 +31,7 @@ router.get('/:kind', (req, res) => {
   res.json({ users: rows });
 });
 
-router.post('/:kind', async (req, res) => {
+router.post('/:kind', requireFullAdmin, async (req, res) => {
   const value = getConfig(req.params.kind, res); if (!value) return;
   const { username, password, name, phone, active = 1, tiktokUrl, instagramUrl, xUrl, desiredFee, projectIds } = req.body;
   if (!username?.trim() || !password || !name?.trim()) return res.status(400).json({ error: 'Ad, kullanıcı adı ve şifre zorunlu' });
@@ -52,7 +52,7 @@ router.post('/:kind', async (req, res) => {
   } catch (err) { if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' }); throw err; }
 });
 
-router.put('/:kind/:id', (req, res) => {
+router.put('/:kind/:id', requireFullAdmin, (req, res) => {
   const value = getConfig(req.params.kind, res); if (!value) return;
   const { name, phone, active = 1, tiktokUrl, instagramUrl, xUrl, desiredFee, projectIds } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Ad zorunlu' });
@@ -73,7 +73,7 @@ router.put('/:kind/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/:kind/:id', (req, res) => {
+router.delete('/:kind/:id', requireFullAdmin, (req, res) => {
   const value = getConfig(req.params.kind, res); if (!value) return;
   const user = db.prepare('SELECT id FROM users WHERE id = ? AND role = ?').get(req.params.id, value.role);
   if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });

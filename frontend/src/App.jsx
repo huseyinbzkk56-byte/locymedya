@@ -82,14 +82,14 @@ function AppRoutes() {
         <Route path="/admin/users" element={<ProtectedRoute role="admin"><AdminUsers /></ProtectedRoute>} />
         <Route path="/admin/rap-media" element={<ProtectedRoute role="admin"><AdminMembers kind="rap-media" title="Rap Medyaları" /></ProtectedRoute>} />
         <Route path="/admin/influencers" element={<ProtectedRoute role="admin"><AdminMembers kind="influencers" title="Influencerlar" /></ProtectedRoute>} />
-        <Route path="/admin/payments" element={<ProtectedRoute role="admin"><Payments /></ProtectedRoute>} />
-        <Route path="/admin/payment-rules" element={<ProtectedRoute role="admin"><PaymentRules /></ProtectedRoute>} />
+        <Route path="/admin/payments" element={<ProtectedRoute role="admin" fullAdminOnly><Payments /></ProtectedRoute>} />
+        <Route path="/admin/payment-rules" element={<ProtectedRoute role="admin" fullAdminOnly><PaymentRules /></ProtectedRoute>} />
         <Route path="/admin/reports" element={<ProtectedRoute role="admin"><Reports /></ProtectedRoute>} />
-        <Route path="/admin/songs" element={<ProtectedRoute role="admin"><Songs /></ProtectedRoute>} />
+        <Route path="/admin/songs" element={<ProtectedRoute role="admin" fullAdminOnly><Songs /></ProtectedRoute>} />
         <Route path="/admin/videos" element={<ProtectedRoute role="admin"><Videos /></ProtectedRoute>} />
         <Route path="/admin/profile" element={<ProtectedRoute role="admin"><Profile /></ProtectedRoute>} />
-        <Route path="/admin/contact-messages" element={<ProtectedRoute role="admin"><AdminContactMessages /></ProtectedRoute>} />
-        <Route path="/admin/offers/:id" element={<ProtectedRoute role="admin"><OfferDetail /></ProtectedRoute>} />
+        <Route path="/admin/contact-messages" element={<ProtectedRoute role="admin" fullAdminOnly><AdminContactMessages /></ProtectedRoute>} />
+        <Route path="/admin/offers/:id" element={<ProtectedRoute role="admin" fullAdminOnly><OfferDetail /></ProtectedRoute>} />
         <Route
           path="/influencer"
           element={

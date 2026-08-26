@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { apiFetch } from '../api/client';
+import { apiFetch, getCurrentUser } from '../api/client';
 
 const MONTH_LABELS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
@@ -90,6 +90,8 @@ function YearlyStats() {
 export default function Reports() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const isCompanyAdmin = getCurrentUser()?.adminScope === 'company';
+  const earningsSuffix = isCompanyAdmin ? 'ödenecek ücret' : 'TL';
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/reports`, { headers: { Authorization: `Bearer ${localStorage.getItem('locy_token')}` } }).then((res) => res.json()).then(setData).catch((err) => setError(err.message));
   }, []);
@@ -99,7 +101,7 @@ export default function Reports() {
         <h1 className="text-3xl font-semibold">Raporlar</h1>
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
         <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[['totalViews', 'Toplam izlenme'], ['videoCount', 'Video sayısı'], ['activeVideoCount', 'Aktif video'], ['unavailableVideoCount', 'Erişilemeyen / silinen'], ['totalEstimatedEarnings', 'Tahmini toplam kazanç (TL)']].map(([key, label]) => (
+          {[['totalViews', 'Toplam izlenme'], ['videoCount', 'Video sayısı'], ['activeVideoCount', 'Aktif video'], ['unavailableVideoCount', 'Erişilemeyen / silinen'], ['totalEstimatedEarnings', isCompanyAdmin ? 'Ödenecek toplam ücret (TL)' : 'Tahmini toplam kazanç (TL)']].map(([key, label]) => (
             <div key={key} className="rounded-xl border border-gray-200 p-4">
               <p className="text-2xl font-semibold">{data?.summary?.[key] ?? 0}</p>
               <p className="mt-1 text-xs text-gray-500">{label}</p>
@@ -110,9 +112,9 @@ export default function Reports() {
         <YearlyStats />
 
         <div className="mt-8 grid gap-6 lg:grid-cols-2">
-          <ReportList title="En çok izlenenler" rows={data?.topVideos} render={(row) => `${row.influencer_name || 'Bilinmeyen'} · ${row.platform} · ${Number(row.views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} TL`} />
-          <ReportList title="Influencer performansı" rows={data?.influencers} render={(row) => `${row.influencer_name || 'Bilinmeyen'} · ${row.video_count} video · ${Number(row.total_views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} TL`} />
-          <ReportList title="Proje performansı" rows={data?.projects} render={(row) => `${row.project_name} · ${row.video_count} video · ${Number(row.total_views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} TL`} />
+          <ReportList title="En çok izlenenler" rows={data?.topVideos} render={(row) => `${row.influencer_name || 'Bilinmeyen'} · ${row.platform} · ${Number(row.views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} ${earningsSuffix}`} />
+          <ReportList title="Influencer performansı" rows={data?.influencers} render={(row) => `${row.influencer_name || 'Bilinmeyen'} · ${row.video_count} video · ${Number(row.total_views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} ${earningsSuffix}`} />
+          <ReportList title="Proje performansı" rows={data?.projects} render={(row) => `${row.project_name} · ${row.video_count} video · ${Number(row.total_views).toLocaleString('tr-TR')} views · ${Number(row.estimated_earnings ?? 0).toLocaleString('tr-TR')} ${earningsSuffix}`} />
           <ReportList title="Aylık / platform dağılımı" rows={data?.monthly} render={(row) => `${row.month} · ${row.platform} · ${row.video_count} video · ${Number(row.total_views).toLocaleString('tr-TR')} views`} />
         </div>
       </div>

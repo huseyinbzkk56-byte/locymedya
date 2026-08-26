@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const STATUSES = new Set(['paid', 'pending', 'cancelled']);
@@ -12,7 +12,7 @@ function validatePayee(influencerId, mediaAccountId) {
   return null;
 }
 
-router.get('/', requireRole('admin'), (req, res) => {
+router.get('/', requireRole('admin'), requireFullAdmin, (req, res) => {
   const payments = db.prepare(`
     SELECT p.*, i.name AS influencer_name, m.name AS media_account_name, pr.name AS project_name,
       CASE WHEN p.influencer_id IS NOT NULL THEN 'influencer' ELSE 'rapmedia' END AS payee_type,
@@ -31,7 +31,7 @@ router.get('/', requireRole('admin'), (req, res) => {
   });
 });
 
-router.post('/', requireRole('admin'), (req, res) => {
+router.post('/', requireRole('admin'), requireFullAdmin, (req, res) => {
   const { influencerId, mediaAccountId, projectId, amount, paidAt, note, status = 'paid' } = req.body;
   const payeeError = validatePayee(influencerId, mediaAccountId);
   if (payeeError || !projectId || amount === undefined || Number(amount) < 0 || !STATUSES.has(status)) {
@@ -42,7 +42,7 @@ router.post('/', requireRole('admin'), (req, res) => {
   res.status(201).json({ payment: db.prepare('SELECT * FROM payments WHERE id = ?').get(result.lastInsertRowid) });
 });
 
-router.put('/:id', requireRole('admin'), (req, res) => {
+router.put('/:id', requireRole('admin'), requireFullAdmin, (req, res) => {
   const { influencerId, mediaAccountId, projectId, amount, paidAt, note, status = 'paid' } = req.body;
   const payeeError = validatePayee(influencerId, mediaAccountId);
   if (payeeError || !projectId || amount === undefined || Number(amount) < 0 || !STATUSES.has(status)) {
@@ -54,7 +54,7 @@ router.put('/:id', requireRole('admin'), (req, res) => {
   res.json({ payment: db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id) });
 });
 
-router.delete('/:id', requireRole('admin'), (req, res) => {
+router.delete('/:id', requireRole('admin'), requireFullAdmin, (req, res) => {
   const result = db.prepare('DELETE FROM payments WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Ödeme bulunamadı' });
   res.status(204).end();

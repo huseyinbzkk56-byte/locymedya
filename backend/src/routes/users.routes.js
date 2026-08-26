@@ -1,36 +1,38 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { hashPassword } = require('../utils/password');
 
 const router = express.Router();
 const VALID_ROLES = ['admin', 'influencer', 'rapmedia'];
+const ADMIN_SCOPES = ['full', 'company'];
 
 router.use(authenticate, requireRole('admin'));
 
-// Kullanıcı listesi (şifre hash'i asla dönmez)
+// Kullanıcı listesi (şifre hash'i asla dönmez) — şirket hesabı da görebilir
 router.get('/', (req, res) => {
   const users = db
-    .prepare("SELECT id, username, role, display_name, phone, active, created_at FROM users WHERE role IN ('admin','influencer','rapmedia') ORDER BY created_at DESC")
+    .prepare("SELECT id, username, role, display_name, phone, active, admin_scope, created_at FROM users WHERE role IN ('admin','influencer','rapmedia') ORDER BY created_at DESC")
     .all();
   res.json(users);
 });
 
 // Yeni kullanıcı oluştur (influencer / sanatçı / rap medya / admin)
-router.post('/', async (req, res) => {
-  const { username, password, role, displayName, phone, active = 1, tiktokUrl, instagramUrl, xUrl, desiredFee } = req.body;
+router.post('/', requireFullAdmin, async (req, res) => {
+  const { username, password, role, displayName, phone, active = 1, tiktokUrl, instagramUrl, xUrl, desiredFee, adminScope } = req.body;
   if (!username || !password || !role) {
     return res.status(400).json({ error: 'username, password ve role zorunlu' });
   }
   if (!VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'Geçersiz rol' });
   }
+  const scope = role === 'admin' && ADMIN_SCOPES.includes(adminScope) ? adminScope : 'full';
 
   const passwordHash = await hashPassword(password);
   try {
     const result = db
-      .prepare('INSERT INTO users (username, password_hash, role, display_name, phone, active) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(username, passwordHash, role, displayName || username, phone || null, active ? 1 : 0);
+      .prepare('INSERT INTO users (username, password_hash, role, display_name, phone, active, admin_scope) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(username, passwordHash, role, displayName || username, phone || null, active ? 1 : 0, scope);
 
     // Role'e göre ilişkili kayıt oluştur (influencer/artist/rapmedia panelinin veriyi bulabilmesi için)
     if (role === 'influencer') {
@@ -49,7 +51,7 @@ router.post('/', async (req, res) => {
 });
 
 // Admin şifre sıfırlama (kullanıcı şifresini unutursa)
-router.put('/:id/password', async (req, res) => {
+router.put('/:id/password', requireFullAdmin, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Yeni şifre zorunlu' });
   const passwordHash = await hashPassword(password);
@@ -57,7 +59,7 @@ router.put('/:id/password', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', requireFullAdmin, (req, res) => {
   const { displayName, phone, active } = req.body;
   db.prepare('UPDATE users SET display_name = ?, phone = ?, active = ? WHERE id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.id);
@@ -66,7 +68,7 @@ router.put('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireFullAdmin, (req, res) => {
   const removeUser = db.transaction(() => {
     const influencer = db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.params.id);
     const artist = db.prepare('SELECT id FROM artists WHERE user_id = ?').get(req.params.id);

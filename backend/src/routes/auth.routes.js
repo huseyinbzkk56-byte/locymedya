@@ -25,7 +25,7 @@ router.post('/login', async (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    { id: user.id, username: user.username, role: user.role, adminScope: user.admin_scope },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -36,7 +36,8 @@ router.post('/login', async (req, res) => {
       id: user.id,
       username: user.username,
       role: user.role,
-      displayName: user.display_name
+      displayName: user.display_name,
+      adminScope: user.admin_scope
     }
   });
 });
@@ -64,6 +65,44 @@ router.post('/register', async (req, res) => {
 // Giriş yapmış kullanıcının kendi bilgisi (sayfa yenilendiğinde oturumu doğrulamak için)
 router.get('/me', require('../middleware/auth').authenticate, (req, res) => {
   res.json({ user: req.user });
+});
+
+// Kendi şifresini değiştirme — tüm roller (admin dahil) kendi hesabında kullanabilir
+router.put('/me/password', require('../middleware/auth').authenticate, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Mevcut şifre ve yeni şifre zorunlu' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı' });
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+  const valid = await verifyPassword(currentPassword, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Mevcut şifre hatalı' });
+
+  const passwordHash = await hashPassword(newPassword);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
+  res.json({ ok: true });
+});
+
+// Kendi kullanıcı adını değiştirme — sadece admin rolü (şirket hesabı dahil, kendi hesabı)
+router.put('/me/username', require('../middleware/auth').authenticate, require('../middleware/auth').requireRole('admin'), async (req, res) => {
+  const { currentPassword, newUsername } = req.body;
+  const trimmed = String(newUsername || '').trim();
+  if (!currentPassword || !trimmed) return res.status(400).json({ error: 'Mevcut şifre ve yeni kullanıcı adı zorunlu' });
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+  const valid = await verifyPassword(currentPassword, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Mevcut şifre hatalı' });
+
+  try {
+    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(trimmed, req.user.id);
+    res.json({ ok: true, username: trimmed });
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' });
+    throw err;
+  }
 });
 
 module.exports = router;

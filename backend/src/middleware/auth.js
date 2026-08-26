@@ -23,4 +23,12 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authenticate, requireRole };
+// Şirket hesabı (kısıtlı admin) için engellenen işlemlerde kullanılır — sadece tam yetkili admin geçebilir
+function requireFullAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin' || req.user.adminScope === 'company') {
+    return res.status(403).json({ error: 'Bu işlem için yetkiniz yok' });
+  }
+  next();
+}
+
+module.exports = { authenticate, requireRole, requireFullAdmin };

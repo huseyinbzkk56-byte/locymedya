@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const CATEGORIES = new Set(['influencer', 'rapmedia', 'dizi']);
@@ -41,7 +41,7 @@ function platformFields(input) {
   };
 }
 
-router.use(authenticate, requireRole('admin'));
+router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
 router.get('/', (req, res) => {
   const { search = '', category = '', platform = '' } = req.query;

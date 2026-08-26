@@ -31,6 +31,7 @@ addColumnIfMissing('songs', 'other_url', 'TEXT');
 addColumnIfMissing('songs', 'show_on_home', 'INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('users', 'phone', 'TEXT');
 addColumnIfMissing('users', 'active', 'INTEGER NOT NULL DEFAULT 1');
+addColumnIfMissing('users', 'admin_scope', "TEXT NOT NULL DEFAULT 'full'");
 addColumnIfMissing('influencers', 'tiktok_url', 'TEXT');
 addColumnIfMissing('influencers', 'phone', 'TEXT');
 addColumnIfMissing('influencers', 'desired_fee', 'REAL');
