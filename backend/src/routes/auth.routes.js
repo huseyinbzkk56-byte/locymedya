@@ -12,7 +12,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Kullanıcı adı ve şifre zorunlu' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  const user = await db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) {
     return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
   }
@@ -49,13 +49,13 @@ router.post('/register', async (req, res) => {
   if (password.length < 6) return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı' });
   try {
     const passwordHash = await hashPassword(password);
-    const create = db.transaction(() => {
-      const user = db.prepare('INSERT INTO users (username, password_hash, role, display_name, phone) VALUES (?, ?, ?, ?, ?)').run(username.trim(), passwordHash, type, name.trim(), phone?.trim() || null);
-      if (type === 'influencer') db.prepare('INSERT INTO influencers (user_id, name, tiktok_url, phone, desired_fee) VALUES (?, ?, ?, ?, ?)').run(user.lastInsertRowid, name.trim(), tiktokUrl?.trim() || null, phone?.trim() || null, desiredFee === '' ? null : desiredFee ?? null);
-      else db.prepare('INSERT INTO media_accounts (user_id, name, phone, instagram_url, tiktok_url, x_url) VALUES (?, ?, ?, ?, ?, ?)').run(user.lastInsertRowid, name.trim(), phone?.trim() || null, instagramUrl?.trim() || null, tiktokUrl?.trim() || null, xUrl?.trim() || null);
+    const id = await db.transaction(async (tx) => {
+      const user = await tx.prepare('INSERT INTO users (username, password_hash, role, display_name, phone) VALUES (?, ?, ?, ?, ?)').run(username.trim(), passwordHash, type, name.trim(), phone?.trim() || null);
+      if (type === 'influencer') await tx.prepare('INSERT INTO influencers (user_id, name, tiktok_url, phone, desired_fee) VALUES (?, ?, ?, ?, ?)').run(user.lastInsertRowid, name.trim(), tiktokUrl?.trim() || null, phone?.trim() || null, desiredFee === '' ? null : desiredFee ?? null);
+      else await tx.prepare('INSERT INTO media_accounts (user_id, name, phone, instagram_url, tiktok_url, x_url) VALUES (?, ?, ?, ?, ?, ?)').run(user.lastInsertRowid, name.trim(), phone?.trim() || null, instagramUrl?.trim() || null, tiktokUrl?.trim() || null, xUrl?.trim() || null);
       return user.lastInsertRowid;
     });
-    res.status(201).json({ id: create() });
+    res.status(201).json({ id });
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' });
     throw err;
@@ -73,14 +73,14 @@ router.put('/me/password', require('../middleware/auth').authenticate, async (re
   if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Mevcut şifre ve yeni şifre zorunlu' });
   if (newPassword.length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı' });
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const valid = await verifyPassword(currentPassword, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Mevcut şifre hatalı' });
 
   const passwordHash = await hashPassword(newPassword);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
+  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.user.id);
   res.json({ ok: true });
 });
 
@@ -90,14 +90,14 @@ router.put('/me/username', require('../middleware/auth').authenticate, require('
   const trimmed = String(newUsername || '').trim();
   if (!currentPassword || !trimmed) return res.status(400).json({ error: 'Mevcut şifre ve yeni kullanıcı adı zorunlu' });
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
   const valid = await verifyPassword(currentPassword, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Mevcut şifre hatalı' });
 
   try {
-    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(trimmed, req.user.id);
+    await db.prepare('UPDATE users SET username = ? WHERE id = ?').run(trimmed, req.user.id);
     res.json({ ok: true, username: trimmed });
   } catch (err) {
     if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Bu kullanıcı adı zaten kullanılıyor' });

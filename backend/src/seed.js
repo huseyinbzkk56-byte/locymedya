@@ -3,14 +3,15 @@ const db = require('./db/db');
 const { hashPassword } = require('./utils/password');
 
 async function seed() {
-  const existing = db.prepare("SELECT * FROM users WHERE role = 'admin'").get();
+  await db.init();
+  const existing = await db.prepare("SELECT * FROM users WHERE role = 'admin'").get();
   if (existing) {
     console.log('Zaten bir admin kullanıcı var ->', existing.username);
     return;
   }
 
   const passwordHash = await hashPassword('admin123');
-  db.prepare(
+  await db.prepare(
     'INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)'
   ).run('admin', passwordHash, 'admin', 'Admin');
 
@@ -20,4 +21,7 @@ async function seed() {
   console.log('ÖNEMLİ: Giriş yaptıktan sonra bu şifreyi mutlaka değiştirin.');
 }
 
-seed();
+seed().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

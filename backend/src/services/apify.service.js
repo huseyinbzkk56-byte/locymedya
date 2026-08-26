@@ -77,18 +77,18 @@ async function refreshVideo(video) {
   try {
     const metrics = await fetchPublicMetrics(video);
     const status = metrics.unavailable ? 'deleted' : 'active';
-    db.prepare('UPDATE videos SET status = ? WHERE id = ?').run(status, video.id);
-    db.prepare('INSERT INTO video_metrics (video_id, views, likes, comments, shares) VALUES (?, ?, ?, ?, ?)').run(video.id, metrics.views, metrics.likes, metrics.comments, metrics.shares);
+    await db.prepare('UPDATE videos SET status = ? WHERE id = ?').run(status, video.id);
+    await db.prepare('INSERT INTO video_metrics (video_id, views, likes, comments, shares) VALUES (?, ?, ?, ?, ?)').run(video.id, metrics.views, metrics.likes, metrics.comments, metrics.shares);
     return { id: video.id, status, views: metrics.views };
   } catch (error) {
-    db.prepare("UPDATE videos SET status = 'unreachable' WHERE id = ? AND status = 'active'").run(video.id);
+    await db.prepare("UPDATE videos SET status = 'unreachable' WHERE id = ? AND status = 'active'").run(video.id);
     return { id: video.id, status: 'unreachable', error: error.message };
   }
 }
 
 async function refreshActiveVideos() {
   if (!process.env.APIFY_API_TOKEN) return { skipped: true, reason: 'APIFY_API_TOKEN tanımlı değil' };
-  const videos = db.prepare("SELECT * FROM videos WHERE status = 'active'").all();
+  const videos = await db.prepare("SELECT * FROM videos WHERE status = 'active'").all();
   const results = [];
   for (const video of videos) results.push(await refreshVideo(video));
   return { skipped: false, count: results.length, results };

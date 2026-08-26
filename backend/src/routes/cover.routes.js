@@ -23,16 +23,16 @@ const upload = multer({
   }
 });
 
-router.post('/songs/:id/cover', authenticate, requireRole('admin'), upload.single('cover'), (req, res) => {
+router.post('/songs/:id/cover', authenticate, requireRole('admin'), upload.single('cover'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Kapak görseli zorunlu' });
-  const song = db.prepare('SELECT id, cover_url FROM songs WHERE id = ?').get(req.params.id);
+  const song = await db.prepare('SELECT id, cover_url FROM songs WHERE id = ?').get(req.params.id);
   if (!song) {
     fs.rmSync(req.file.path, { force: true });
     return res.status(404).json({ error: 'Şarkı bulunamadı' });
   }
   if (song.cover_url?.startsWith('/uploads/covers/')) fs.rmSync(path.join(uploadDir, path.basename(song.cover_url)), { force: true });
   const coverUrl = `/uploads/covers/${req.file.filename}`;
-  db.prepare('UPDATE songs SET cover_url = ? WHERE id = ?').run(coverUrl, song.id);
+  await db.prepare('UPDATE songs SET cover_url = ? WHERE id = ?').run(coverUrl, song.id);
   res.json({ coverUrl });
 });
 

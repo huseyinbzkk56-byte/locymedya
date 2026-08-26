@@ -10,8 +10,8 @@ const ADMIN_SCOPES = ['full', 'company'];
 router.use(authenticate, requireRole('admin'));
 
 // Kullanıcı listesi (şifre hash'i asla dönmez) — şirket hesabı da görebilir
-router.get('/', (req, res) => {
-  const users = db
+router.get('/', async (req, res) => {
+  const users = await db
     .prepare("SELECT id, username, role, display_name, phone, active, admin_scope, created_at FROM users WHERE role IN ('admin','influencer','rapmedia') ORDER BY created_at DESC")
     .all();
   res.json(users);
@@ -30,15 +30,15 @@ router.post('/', requireFullAdmin, async (req, res) => {
 
   const passwordHash = await hashPassword(password);
   try {
-    const result = db
+    const result = await db
       .prepare('INSERT INTO users (username, password_hash, role, display_name, phone, active, admin_scope) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(username, passwordHash, role, displayName || username, phone || null, active ? 1 : 0, scope);
 
     // Role'e göre ilişkili kayıt oluştur (influencer/artist/rapmedia panelinin veriyi bulabilmesi için)
     if (role === 'influencer') {
-      db.prepare('INSERT INTO influencers (user_id, name, tiktok_url, phone, desired_fee, active) VALUES (?, ?, ?, ?, ?, ?)').run(result.lastInsertRowid, displayName || username, tiktokUrl || null, phone || null, desiredFee === '' ? null : desiredFee ?? null, active ? 1 : 0);
+      await db.prepare('INSERT INTO influencers (user_id, name, tiktok_url, phone, desired_fee, active) VALUES (?, ?, ?, ?, ?, ?)').run(result.lastInsertRowid, displayName || username, tiktokUrl || null, phone || null, desiredFee === '' ? null : desiredFee ?? null, active ? 1 : 0);
     } else if (role === 'rapmedia') {
-      db.prepare('INSERT INTO media_accounts (user_id, name, phone, instagram_url, tiktok_url, x_url, active) VALUES (?, ?, ?, ?, ?, ?, ?)').run(result.lastInsertRowid, displayName || username, phone || null, instagramUrl || null, tiktokUrl || null, xUrl || null, active ? 1 : 0);
+      await db.prepare('INSERT INTO media_accounts (user_id, name, phone, instagram_url, tiktok_url, x_url, active) VALUES (?, ?, ?, ?, ?, ?, ?)').run(result.lastInsertRowid, displayName || username, phone || null, instagramUrl || null, tiktokUrl || null, xUrl || null, active ? 1 : 0);
     }
 
     res.status(201).json({ id: result.lastInsertRowid });
@@ -55,38 +55,37 @@ router.put('/:id/password', requireFullAdmin, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Yeni şifre zorunlu' });
   const passwordHash = await hashPassword(password);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.params.id);
+  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, req.params.id);
   res.json({ ok: true });
 });
 
-router.put('/:id', requireFullAdmin, (req, res) => {
+router.put('/:id', requireFullAdmin, async (req, res) => {
   const { displayName, phone, active } = req.body;
-  db.prepare('UPDATE users SET display_name = ?, phone = ?, active = ? WHERE id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
-  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.id);
-  if (user?.role === 'influencer') db.prepare('UPDATE influencers SET name = ?, phone = ?, active = ? WHERE user_id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
-  if (user?.role === 'rapmedia') db.prepare('UPDATE media_accounts SET name = ?, phone = ?, active = ? WHERE user_id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
+  await db.prepare('UPDATE users SET display_name = ?, phone = ?, active = ? WHERE id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
+  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.id);
+  if (user?.role === 'influencer') await db.prepare('UPDATE influencers SET name = ?, phone = ?, active = ? WHERE user_id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
+  if (user?.role === 'rapmedia') await db.prepare('UPDATE media_accounts SET name = ?, phone = ?, active = ? WHERE user_id = ?').run(displayName || null, phone || null, active ? 1 : 0, req.params.id);
   res.json({ ok: true });
 });
 
-router.delete('/:id', requireFullAdmin, (req, res) => {
-  const removeUser = db.transaction(() => {
-    const influencer = db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.params.id);
-    const artist = db.prepare('SELECT id FROM artists WHERE user_id = ?').get(req.params.id);
-    const mediaAccount = db.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.params.id);
+router.delete('/:id', requireFullAdmin, async (req, res) => {
+  const result = await db.transaction(async (tx) => {
+    const influencer = await tx.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.params.id);
+    const artist = await tx.prepare('SELECT id FROM artists WHERE user_id = ?').get(req.params.id);
+    const mediaAccount = await tx.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.params.id);
     if (influencer) {
-      db.prepare('DELETE FROM payments WHERE influencer_id = ?').run(influencer.id);
-      db.prepare('DELETE FROM project_influencers WHERE influencer_id = ?').run(influencer.id);
-      db.prepare('DELETE FROM influencers WHERE id = ?').run(influencer.id);
+      await tx.prepare('DELETE FROM payments WHERE influencer_id = ?').run(influencer.id);
+      await tx.prepare('DELETE FROM project_influencers WHERE influencer_id = ?').run(influencer.id);
+      await tx.prepare('DELETE FROM influencers WHERE id = ?').run(influencer.id);
     }
-    if (artist) db.prepare('DELETE FROM artists WHERE id = ?').run(artist.id);
+    if (artist) await tx.prepare('DELETE FROM artists WHERE id = ?').run(artist.id);
     if (mediaAccount) {
-      db.prepare('DELETE FROM project_media_accounts WHERE media_account_id = ?').run(mediaAccount.id);
-      db.prepare('DELETE FROM media_accounts WHERE id = ?').run(mediaAccount.id);
+      await tx.prepare('DELETE FROM project_media_accounts WHERE media_account_id = ?').run(mediaAccount.id);
+      await tx.prepare('DELETE FROM media_accounts WHERE id = ?').run(mediaAccount.id);
     }
-    db.prepare('UPDATE videos SET owner_user_id = NULL WHERE owner_user_id = ?').run(req.params.id);
-    return db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+    await tx.prepare('UPDATE videos SET owner_user_id = NULL WHERE owner_user_id = ?').run(req.params.id);
+    return await tx.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   });
-  const result = removeUser();
   if (!result.changes) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
   res.json({ ok: true });
 });

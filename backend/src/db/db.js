@@ -1,154 +1,236 @@
-const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@libsql/client');
 
-const dataDir = path.join(__dirname, '../../data');
-fs.mkdirSync(dataDir, { recursive: true });
+if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
+  console.error('HATA: TURSO_DATABASE_URL ve TURSO_AUTH_TOKEN .env dosyasında tanımlı olmalı.');
+  process.exit(1);
+}
 
-const dbPath = path.join(dataDir, 'locymedya.db');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN
+});
 
-const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schema);
+function toRunResult(result) {
+  return {
+    changes: result.rowsAffected,
+    lastInsertRowid: result.lastInsertRowid === undefined || result.lastInsertRowid === null
+      ? undefined
+      : Number(result.lastInsertRowid)
+  };
+}
 
-const addColumnIfMissing = (table, column, definition) => {
-	const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((item) => item.name);
-	if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+// better-sqlite3 ile aynı şekil: db.prepare(sql).get/all/run(...args) — ama async (await gerekir)
+function prepareOn(executor) {
+  return function prepare(sql) {
+    return {
+      async get(...args) {
+        const result = await executor({ sql, args });
+        return result.rows[0];
+      },
+      async all(...args) {
+        const result = await executor({ sql, args });
+        return result.rows;
+      },
+      async run(...args) {
+        const result = await executor({ sql, args });
+        return toRunResult(result);
+      }
+    };
+  };
+}
+
+// Tek bir SQL bağlantısı üzerinde çalışan atomik işlem. Kullanım:
+//   const id = await db.transaction(async (tx) => { ... tx.prepare(sql).run(...) ...; return id; });
+async function transaction(fn) {
+  const tx = await client.transaction('write');
+  try {
+    const result = await fn({ prepare: prepareOn((stmt) => tx.execute(stmt)) });
+    await tx.commit();
+    return result;
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+}
+
+const db = {
+  prepare: prepareOn((stmt) => client.execute(stmt)),
+  transaction,
+  async exec(sql) {
+    await client.executeMultiple(sql);
+  }
 };
-addColumnIfMissing('projects', 'cover_url', 'TEXT');
-addColumnIfMissing('projects', 'artist_name', 'TEXT');
-addColumnIfMissing('projects', 'song_name', 'TEXT');
-addColumnIfMissing('projects', 'description', 'TEXT');
-addColumnIfMissing('projects', 'public_url', 'TEXT');
-addColumnIfMissing('projects', 'show_on_home', 'INTEGER NOT NULL DEFAULT 0');
-addColumnIfMissing('songs', 'description', 'TEXT');
-addColumnIfMissing('songs', 'artist_name', 'TEXT');
-addColumnIfMissing('songs', 'spotify_url', 'TEXT');
-addColumnIfMissing('songs', 'youtube_url', 'TEXT');
-addColumnIfMissing('songs', 'other_url', 'TEXT');
-addColumnIfMissing('songs', 'show_on_home', 'INTEGER NOT NULL DEFAULT 0');
-addColumnIfMissing('users', 'phone', 'TEXT');
-addColumnIfMissing('users', 'active', 'INTEGER NOT NULL DEFAULT 1');
-addColumnIfMissing('users', 'admin_scope', "TEXT NOT NULL DEFAULT 'full'");
-addColumnIfMissing('influencers', 'tiktok_url', 'TEXT');
-addColumnIfMissing('influencers', 'phone', 'TEXT');
-addColumnIfMissing('influencers', 'desired_fee', 'REAL');
-addColumnIfMissing('influencers', 'active', 'INTEGER NOT NULL DEFAULT 1');
-addColumnIfMissing('media_accounts', 'phone', 'TEXT');
-addColumnIfMissing('media_accounts', 'instagram_url', 'TEXT');
-addColumnIfMissing('media_accounts', 'tiktok_url', 'TEXT');
-addColumnIfMissing('media_accounts', 'x_url', 'TEXT');
-addColumnIfMissing('media_accounts', 'active', 'INTEGER NOT NULL DEFAULT 1');
-addColumnIfMissing('links', 'title', 'TEXT');
-addColumnIfMissing('links', 'preview_image', 'TEXT');
-addColumnIfMissing('links', 'preview_title', 'TEXT');
-addColumnIfMissing('links', 'preview_fetched_at', 'TEXT');
-addColumnIfMissing('links', 'stats_views', 'INTEGER');
-addColumnIfMissing('links', 'stats_likes', 'INTEGER');
-addColumnIfMissing('links', 'stats_comments', 'INTEGER');
-addColumnIfMissing('links', 'stats_fetched_at', 'TEXT');
-addColumnIfMissing('links', 'screenshot_url', 'TEXT');
-addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
 
-// links.platform CHECK kısıtlaması eski (instagram/tiktok/x) ise genişlet — yeni platformlar (youtube/spotify/facebook/web) eklenebilsin
-const linksTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'links'").get();
-if (linksTableSql && !linksTableSql.sql.includes('youtube')) {
-	db.exec(`
-		CREATE TABLE links_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			platform TEXT NOT NULL CHECK(platform IN ('instagram','tiktok','x','youtube','spotify','facebook','web')),
-			url TEXT NOT NULL,
-			title TEXT,
-			created_at TEXT DEFAULT (datetime('now'))
-		);
-		INSERT INTO links_new (id, platform, url, title, created_at) SELECT id, platform, url, title, created_at FROM links;
-		DROP TABLE links;
-		ALTER TABLE links_new RENAME TO links;
-	`);
+async function columnsOf(table) {
+  const rows = await db.prepare(`PRAGMA table_info(${table})`).all();
+  return rows.map((row) => row.name);
 }
 
-const paymentColumns = db.prepare('PRAGMA table_info(payments)').all().map((column) => column.name);
-if (!paymentColumns.includes('status')) {
-	db.exec("ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'paid' CHECK(status IN ('paid','pending','cancelled'))");
-}
-addColumnIfMissing('payments', 'media_account_id', 'INTEGER REFERENCES media_accounts(id)');
-
-// offer_accounts: tekli platform şemasından (platform/profile_url/...) çoklu platform şemasına
-// (instagram_*/tiktok_*) geçiş. Hesap id'leri korunur, offer_list_items referansları bozulmaz.
-const offerAccountColumns = db.prepare('PRAGMA table_info(offer_accounts)').all().map((column) => column.name);
-if (offerAccountColumns.includes('platform')) {
-	const oldRows = db.prepare('SELECT * FROM offer_accounts').all();
-	db.exec(`
-		CREATE TABLE offer_accounts_new (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			category TEXT NOT NULL CHECK(category IN ('influencer','rapmedia')),
-			instagram_url TEXT,
-			instagram_followers INTEGER,
-			instagram_normal_price REAL,
-			instagram_client_price REAL,
-			tiktok_url TEXT,
-			tiktok_followers INTEGER,
-			tiktok_normal_price REAL,
-			tiktok_client_price REAL,
-			created_at TEXT DEFAULT (datetime('now')),
-			updated_at TEXT DEFAULT (datetime('now'))
-		);
-	`);
-	const insert = db.prepare(`
-		INSERT INTO offer_accounts_new
-			(id, name, category, instagram_url, instagram_followers, instagram_normal_price, instagram_client_price,
-			 tiktok_url, tiktok_followers, tiktok_normal_price, tiktok_client_price, created_at, updated_at)
-		VALUES (@id, @name, @category, @instagram_url, @instagram_followers, @instagram_normal_price, @instagram_client_price,
-			@tiktok_url, @tiktok_followers, @tiktok_normal_price, @tiktok_client_price, @created_at, @updated_at)
-	`);
-	for (const row of oldRows) {
-		const isInstagram = row.platform === 'instagram';
-		insert.run({
-			id: row.id, name: row.name, category: row.category,
-			instagram_url: isInstagram ? row.profile_url : null,
-			instagram_followers: isInstagram ? row.followers : null,
-			instagram_normal_price: isInstagram ? row.normal_price : null,
-			instagram_client_price: isInstagram ? row.client_price : null,
-			tiktok_url: !isInstagram ? row.profile_url : null,
-			tiktok_followers: !isInstagram ? row.followers : null,
-			tiktok_normal_price: !isInstagram ? row.normal_price : null,
-			tiktok_client_price: !isInstagram ? row.client_price : null,
-			created_at: row.created_at, updated_at: row.updated_at
-		});
-	}
-	db.exec('DROP TABLE offer_accounts');
-	db.exec('ALTER TABLE offer_accounts_new RENAME TO offer_accounts');
+async function addColumnIfMissing(table, column, definition) {
+  const columns = await columnsOf(table);
+  if (!columns.includes(column)) await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
-// offer_accounts.category CHECK kısıtlaması eski (influencer/rapmedia) ise genişlet — "Dizi Edit Sayfası" kategorisi eklenebilsin
-const offerAccountsTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'offer_accounts'").get();
-if (offerAccountsTableSql && !offerAccountsTableSql.sql.includes('dizi')) {
-	db.exec(`
-		CREATE TABLE offer_accounts_new2 (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			category TEXT NOT NULL CHECK(category IN ('influencer','rapmedia','dizi')),
-			instagram_url TEXT,
-			instagram_followers INTEGER,
-			instagram_normal_price REAL,
-			instagram_client_price REAL,
-			tiktok_url TEXT,
-			tiktok_followers INTEGER,
-			tiktok_normal_price REAL,
-			tiktok_client_price REAL,
-			created_at TEXT DEFAULT (datetime('now')),
-			updated_at TEXT DEFAULT (datetime('now'))
-		);
-		INSERT INTO offer_accounts_new2 SELECT * FROM offer_accounts;
-		DROP TABLE offer_accounts;
-		ALTER TABLE offer_accounts_new2 RENAME TO offer_accounts;
-	`);
+async function tableSql(table) {
+  const row = await db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+  return row ? row.sql : null;
 }
 
-// İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır
-db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('view_payment_rate', '0.0015')").run();
+let initPromise = null;
+
+function init() {
+  if (!initPromise) initPromise = runInit();
+  return initPromise;
+}
+
+async function runInit() {
+  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  await db.exec(schema);
+
+  await addColumnIfMissing('projects', 'cover_url', 'TEXT');
+  await addColumnIfMissing('projects', 'artist_name', 'TEXT');
+  await addColumnIfMissing('projects', 'song_name', 'TEXT');
+  await addColumnIfMissing('projects', 'description', 'TEXT');
+  await addColumnIfMissing('projects', 'public_url', 'TEXT');
+  await addColumnIfMissing('projects', 'show_on_home', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing('songs', 'description', 'TEXT');
+  await addColumnIfMissing('songs', 'artist_name', 'TEXT');
+  await addColumnIfMissing('songs', 'spotify_url', 'TEXT');
+  await addColumnIfMissing('songs', 'youtube_url', 'TEXT');
+  await addColumnIfMissing('songs', 'other_url', 'TEXT');
+  await addColumnIfMissing('songs', 'show_on_home', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing('users', 'phone', 'TEXT');
+  await addColumnIfMissing('users', 'active', 'INTEGER NOT NULL DEFAULT 1');
+  await addColumnIfMissing('users', 'admin_scope', "TEXT NOT NULL DEFAULT 'full'");
+  await addColumnIfMissing('influencers', 'tiktok_url', 'TEXT');
+  await addColumnIfMissing('influencers', 'phone', 'TEXT');
+  await addColumnIfMissing('influencers', 'desired_fee', 'REAL');
+  await addColumnIfMissing('influencers', 'active', 'INTEGER NOT NULL DEFAULT 1');
+  await addColumnIfMissing('media_accounts', 'phone', 'TEXT');
+  await addColumnIfMissing('media_accounts', 'instagram_url', 'TEXT');
+  await addColumnIfMissing('media_accounts', 'tiktok_url', 'TEXT');
+  await addColumnIfMissing('media_accounts', 'x_url', 'TEXT');
+  await addColumnIfMissing('media_accounts', 'active', 'INTEGER NOT NULL DEFAULT 1');
+  await addColumnIfMissing('links', 'title', 'TEXT');
+  await addColumnIfMissing('links', 'preview_image', 'TEXT');
+  await addColumnIfMissing('links', 'preview_title', 'TEXT');
+  await addColumnIfMissing('links', 'preview_fetched_at', 'TEXT');
+  await addColumnIfMissing('links', 'stats_views', 'INTEGER');
+  await addColumnIfMissing('links', 'stats_likes', 'INTEGER');
+  await addColumnIfMissing('links', 'stats_comments', 'INTEGER');
+  await addColumnIfMissing('links', 'stats_fetched_at', 'TEXT');
+  await addColumnIfMissing('links', 'screenshot_url', 'TEXT');
+  await addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+
+  // links.platform CHECK kısıtlaması eski (instagram/tiktok/x) ise genişlet — yeni platformlar (youtube/spotify/facebook/web) eklenebilsin
+  const linksSql = await tableSql('links');
+  if (linksSql && !linksSql.includes('youtube')) {
+    await db.exec(`
+      CREATE TABLE links_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        platform TEXT NOT NULL CHECK(platform IN ('instagram','tiktok','x','youtube','spotify','facebook','web')),
+        url TEXT NOT NULL,
+        title TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO links_new (id, platform, url, title, created_at) SELECT id, platform, url, title, created_at FROM links;
+      DROP TABLE links;
+      ALTER TABLE links_new RENAME TO links;
+    `);
+    await addColumnIfMissing('links', 'preview_image', 'TEXT');
+    await addColumnIfMissing('links', 'preview_title', 'TEXT');
+    await addColumnIfMissing('links', 'preview_fetched_at', 'TEXT');
+    await addColumnIfMissing('links', 'stats_views', 'INTEGER');
+    await addColumnIfMissing('links', 'stats_likes', 'INTEGER');
+    await addColumnIfMissing('links', 'stats_comments', 'INTEGER');
+    await addColumnIfMissing('links', 'stats_fetched_at', 'TEXT');
+    await addColumnIfMissing('links', 'screenshot_url', 'TEXT');
+    await addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+  }
+
+  const paymentColumns = await columnsOf('payments');
+  if (!paymentColumns.includes('status')) {
+    await db.exec("ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'paid' CHECK(status IN ('paid','pending','cancelled'))");
+  }
+  await addColumnIfMissing('payments', 'media_account_id', 'INTEGER REFERENCES media_accounts(id)');
+
+  // offer_accounts: tekli platform şemasından (platform/profile_url/...) çoklu platform şemasına
+  // (instagram_*/tiktok_*) geçiş. Hesap id'leri korunur, offer_list_items referansları bozulmaz.
+  const offerAccountColumns = await columnsOf('offer_accounts');
+  if (offerAccountColumns.includes('platform')) {
+    const oldRows = await db.prepare('SELECT * FROM offer_accounts').all();
+    await db.exec(`
+      CREATE TABLE offer_accounts_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('influencer','rapmedia')),
+        instagram_url TEXT,
+        instagram_followers INTEGER,
+        instagram_normal_price REAL,
+        instagram_client_price REAL,
+        tiktok_url TEXT,
+        tiktok_followers INTEGER,
+        tiktok_normal_price REAL,
+        tiktok_client_price REAL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+    const insert = db.prepare(`
+      INSERT INTO offer_accounts_new
+        (id, name, category, instagram_url, instagram_followers, instagram_normal_price, instagram_client_price,
+         tiktok_url, tiktok_followers, tiktok_normal_price, tiktok_client_price, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of oldRows) {
+      const isInstagram = row.platform === 'instagram';
+      await insert.run(
+        row.id, row.name, row.category,
+        isInstagram ? row.profile_url : null,
+        isInstagram ? row.followers : null,
+        isInstagram ? row.normal_price : null,
+        isInstagram ? row.client_price : null,
+        !isInstagram ? row.profile_url : null,
+        !isInstagram ? row.followers : null,
+        !isInstagram ? row.normal_price : null,
+        !isInstagram ? row.client_price : null,
+        row.created_at, row.updated_at
+      );
+    }
+    await db.exec('DROP TABLE offer_accounts');
+    await db.exec('ALTER TABLE offer_accounts_new RENAME TO offer_accounts');
+  }
+
+  // offer_accounts.category CHECK kısıtlaması eski (influencer/rapmedia) ise genişlet — "Dizi Edit Sayfası" kategorisi eklenebilsin
+  const offerAccountsSql = await tableSql('offer_accounts');
+  if (offerAccountsSql && !offerAccountsSql.includes('dizi')) {
+    await db.exec(`
+      CREATE TABLE offer_accounts_new2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('influencer','rapmedia','dizi')),
+        instagram_url TEXT,
+        instagram_followers INTEGER,
+        instagram_normal_price REAL,
+        instagram_client_price REAL,
+        tiktok_url TEXT,
+        tiktok_followers INTEGER,
+        tiktok_normal_price REAL,
+        tiktok_client_price REAL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO offer_accounts_new2 SELECT * FROM offer_accounts;
+      DROP TABLE offer_accounts;
+      ALTER TABLE offer_accounts_new2 RENAME TO offer_accounts;
+    `);
+  }
+
+  // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır
+  await db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('view_payment_rate', '0.0015')").run();
+}
 
 module.exports = db;
+module.exports.init = init;

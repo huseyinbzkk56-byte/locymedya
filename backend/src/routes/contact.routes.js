@@ -22,7 +22,7 @@ function validateMessage(body) {
 }
 
 // Public: mesaj gönderme (kimlik doğrulama gerektirmez, rate-limit'li)
-router.post('/', rateLimit({ windowMs: 10 * 60 * 1000, max: 5 }), (req, res) => {
+router.post('/', rateLimit({ windowMs: 10 * 60 * 1000, max: 5 }), async (req, res) => {
   const error = validateMessage(req.body);
   if (error) return res.status(400).json({ error });
 
@@ -32,7 +32,7 @@ router.post('/', rateLimit({ windowMs: 10 * 60 * 1000, max: 5 }), (req, res) => 
   const subject = String(req.body.subject).trim();
   const message = String(req.body.message).trim();
 
-  const result = db.prepare(
+  const result = await db.prepare(
     'INSERT INTO contact_messages (first_name, last_name, phone, subject, message) VALUES (?, ?, ?, ?, ?)'
   ).run(firstName, lastName, phone, subject, message);
 
@@ -42,37 +42,37 @@ router.post('/', rateLimit({ windowMs: 10 * 60 * 1000, max: 5 }), (req, res) => 
 // Bundan sonrası sadece tam yetkili admin
 router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
-router.get('/', (req, res) => {
-  const messages = db.prepare('SELECT * FROM contact_messages ORDER BY created_at DESC, id DESC').all();
-  const unreadCount = db.prepare("SELECT COUNT(*) AS count FROM contact_messages WHERE status = 'unread'").get().count;
+router.get('/', async (req, res) => {
+  const messages = await db.prepare('SELECT * FROM contact_messages ORDER BY created_at DESC, id DESC').all();
+  const unreadCount = (await db.prepare("SELECT COUNT(*) AS count FROM contact_messages WHERE status = 'unread'").get()).count;
   res.json({ messages, unreadCount });
 });
 
-router.get('/unread-count', (req, res) => {
-  const unreadCount = db.prepare("SELECT COUNT(*) AS count FROM contact_messages WHERE status = 'unread'").get().count;
+router.get('/unread-count', async (req, res) => {
+  const unreadCount = (await db.prepare("SELECT COUNT(*) AS count FROM contact_messages WHERE status = 'unread'").get()).count;
   res.json({ unreadCount });
 });
 
-router.get('/:id', (req, res) => {
-  const item = db.prepare('SELECT * FROM contact_messages WHERE id = ?').get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const item = await db.prepare('SELECT * FROM contact_messages WHERE id = ?').get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Mesaj bulunamadı' });
   if (item.status === 'unread') {
-    db.prepare("UPDATE contact_messages SET status = 'read' WHERE id = ?").run(req.params.id);
+    await db.prepare("UPDATE contact_messages SET status = 'read' WHERE id = ?").run(req.params.id);
     item.status = 'read';
   }
   res.json({ message: item });
 });
 
-router.patch('/:id/status', (req, res) => {
+router.patch('/:id/status', async (req, res) => {
   const status = String(req.body.status || '');
   if (!STATUSES.has(status)) return res.status(400).json({ error: 'Geçersiz durum' });
-  const result = db.prepare('UPDATE contact_messages SET status = ? WHERE id = ?').run(status, req.params.id);
+  const result = await db.prepare('UPDATE contact_messages SET status = ? WHERE id = ?').run(status, req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Mesaj bulunamadı' });
-  res.json({ message: db.prepare('SELECT * FROM contact_messages WHERE id = ?').get(req.params.id) });
+  res.json({ message: await db.prepare('SELECT * FROM contact_messages WHERE id = ?').get(req.params.id) });
 });
 
-router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM contact_messages WHERE id = ?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  const result = await db.prepare('DELETE FROM contact_messages WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Mesaj bulunamadı' });
   res.status(204).end();
 });

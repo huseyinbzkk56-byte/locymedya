@@ -1,6 +1,8 @@
 require('dotenv').config();
+require('express-async-errors');
 const express = require('express');
 const cors = require('cors');
+const db = require('./db/db');
 
 const authRoutes = require('./routes/auth.routes');
 const usersRoutes = require('./routes/users.routes');
@@ -72,6 +74,13 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`LOCYMEDYA backend http://localhost:${PORT} adresinde çalışıyor`);
-});
+db.init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`LOCYMEDYA backend http://localhost:${PORT} adresinde çalışıyor`);
+    });
+  })
+  .catch((err) => {
+    console.error('Veritabanı başlatılamadı:', err);
+    process.exit(1);
+  });

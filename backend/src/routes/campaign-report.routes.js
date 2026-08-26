@@ -32,8 +32,8 @@ function formatCompact(value) {
 
 const STATUS_LABEL = { draft: 'Taslak', active: 'Aktif', completed: 'Tamamlandı', cancelled: 'İptal' };
 
-function buildCampaign(projectId) {
-  const project = db.prepare(`
+async function buildCampaign(projectId) {
+  const project = await db.prepare(`
     SELECT p.*, COALESCE(p.artist_name, a.name) AS artist_name, COALESCE(p.song_name, s.title) AS song_title
     FROM projects p
     LEFT JOIN artists a ON a.id = p.artist_id
@@ -42,7 +42,7 @@ function buildCampaign(projectId) {
   `).get(projectId);
   if (!project) return null;
 
-  const videos = db.prepare(`
+  const videos = await db.prepare(`
     SELECT v.id, v.platform, v.url, v.status, v.owner_user_id, v.created_at,
       MAX(COALESCE(vm.views, 0), 0) views, MAX(COALESCE(vm.likes, 0), 0) likes,
       MAX(COALESCE(vm.comments, 0), 0) comments, MAX(COALESCE(vm.shares, 0), 0) shares,
@@ -79,7 +79,7 @@ function buildCampaign(projectId) {
     }))
     .sort((a, b) => b.views - a.views);
 
-  const growth = db.prepare(`
+  const growth = await db.prepare(`
     SELECT day, SUM(day_views) total_views FROM (
       SELECT v.id video_id, date(vm.scraped_at) day, vm.views day_views,
         ROW_NUMBER() OVER (PARTITION BY v.id, date(vm.scraped_at) ORDER BY vm.scraped_at DESC) rn
@@ -109,19 +109,19 @@ function buildCampaign(projectId) {
   };
 }
 
-router.get('/:projectId', (req, res) => {
-  const campaign = buildCampaign(req.params.projectId);
+router.get('/:projectId', async (req, res) => {
+  const campaign = await buildCampaign(req.params.projectId);
   if (!campaign) return res.status(404).json({ error: 'Proje bulunamadı' });
   res.json(campaign);
 });
 
-router.get('/:projectId/pdf', (req, res) => {
-  const campaign = buildCampaign(req.params.projectId);
+router.get('/:projectId/pdf', async (req, res) => {
+  const campaign = await buildCampaign(req.params.projectId);
   if (!campaign) return res.status(404).json({ error: 'Proje bulunamadı' });
   const { project, totals, creators, topVideo, growth } = campaign;
 
-  const brandTitle = getPdfHeaderTitle();
-  const brandSubtitle = getPdfHeaderSubtitle();
+  const brandTitle = await getPdfHeaderTitle();
+  const brandSubtitle = await getPdfHeaderSubtitle();
   const title = `${(project.songTitle || project.name || '').toUpperCase()} KAMPANYA RAPORU`;
 
   res.setHeader('Content-Type', 'application/pdf');

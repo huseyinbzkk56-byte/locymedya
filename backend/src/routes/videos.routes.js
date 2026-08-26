@@ -2,51 +2,52 @@ const express = require('express');
 const db = require('../db/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { refreshVideo } = require('../services/apify.service');
-const { calculateEarning } = require('../utils/settings');
+const { getViewPaymentRate, calculateEarningSync } = require('../utils/settings');
 
 const router = express.Router();
 const PLATFORMS = new Set(['instagram', 'tiktok']);
 
 router.use(authenticate);
 
-function currentOwner(req) {
-  if (req.user.role === 'influencer') return db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.user.id)?.id;
-  if (req.user.role === 'rapmedia') return db.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.user.id)?.id;
+async function currentOwner(req) {
+  if (req.user.role === 'influencer') return (await db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.user.id))?.id;
+  if (req.user.role === 'rapmedia') return (await db.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.user.id))?.id;
   return null;
 }
 
-router.get('/', requireRole('admin', 'influencer', 'artist', 'rapmedia'), (req, res) => {
+router.get('/', requireRole('admin', 'influencer', 'artist', 'rapmedia'), async (req, res) => {
   const latest = 'LEFT JOIN video_metrics latest ON latest.id = (SELECT id FROM video_metrics WHERE video_id = v.id ORDER BY scraped_at DESC, id DESC LIMIT 1)';
   const rows = req.user.role === 'admin'
-    ? db.prepare(`SELECT v.*, p.name AS project_name, u.display_name AS owner_name, latest.views, latest.likes, latest.comments FROM videos v LEFT JOIN projects p ON p.id = v.project_id LEFT JOIN users u ON u.id = v.owner_user_id ${latest} ORDER BY v.created_at DESC`).all()
-    : db.prepare(`SELECT v.*, p.name AS project_name, latest.views, latest.likes, latest.comments FROM videos v LEFT JOIN projects p ON p.id = v.project_id ${latest} WHERE v.owner_user_id = ? ORDER BY v.created_at DESC`).all(req.user.id);
-  res.json({ videos: rows.map((row) => ({ ...row, earning: calculateEarning(row.views) })) });
+    ? await db.prepare(`SELECT v.*, p.name AS project_name, u.display_name AS owner_name, latest.views, latest.likes, latest.comments FROM videos v LEFT JOIN projects p ON p.id = v.project_id LEFT JOIN users u ON u.id = v.owner_user_id ${latest} ORDER BY v.created_at DESC`).all()
+    : await db.prepare(`SELECT v.*, p.name AS project_name, latest.views, latest.likes, latest.comments FROM videos v LEFT JOIN projects p ON p.id = v.project_id ${latest} WHERE v.owner_user_id = ? ORDER BY v.created_at DESC`).all(req.user.id);
+  const rate = await getViewPaymentRate();
+  res.json({ videos: rows.map((row) => ({ ...row, earning: calculateEarningSync(row.views, rate) })) });
 });
 
-router.post('/', requireRole('admin', 'influencer', 'rapmedia'), (req, res) => {
+router.post('/', requireRole('admin', 'influencer', 'rapmedia'), async (req, res) => {
   const { projectId, platform, url } = req.body;
   if (!PLATFORMS.has(platform) || !url) return res.status(400).json({ error: 'Instagram veya TikTok linki zorunlu' });
-  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
+  const project = await db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId);
   if (!project) return res.status(400).json({ error: 'Proje bulunamadı' });
   const ownerId = req.user.role === 'admin' ? req.body.ownerUserId : req.user.id;
   if (!ownerId) return res.status(400).json({ error: 'Video sahibi zorunlu' });
   if (req.user.role === 'influencer') {
-    const influencer = db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.user.id);
-    const assigned = influencer && db.prepare('SELECT 1 FROM project_influencers WHERE project_id = ? AND influencer_id = ?').get(projectId, influencer.id);
+    const influencer = await db.prepare('SELECT id FROM influencers WHERE user_id = ?').get(req.user.id);
+    const assigned = influencer && await db.prepare('SELECT 1 FROM project_influencers WHERE project_id = ? AND influencer_id = ?').get(projectId, influencer.id);
     if (!assigned) return res.status(403).json({ error: 'Bu projeye video ekleme yetkiniz yok' });
   }
   if (req.user.role === 'rapmedia') {
-    const account = db.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.user.id);
-    const assigned = account && db.prepare('SELECT 1 FROM project_media_accounts WHERE project_id = ? AND media_account_id = ?').get(projectId, account.id);
+    const account = await db.prepare('SELECT id FROM media_accounts WHERE user_id = ?').get(req.user.id);
+    const assigned = account && await db.prepare('SELECT 1 FROM project_media_accounts WHERE project_id = ? AND media_account_id = ?').get(projectId, account.id);
     if (!assigned) return res.status(403).json({ error: 'Bu projeye video ekleme yetkiniz yok' });
   }
-  const result = db.prepare('INSERT INTO videos (project_id, owner_user_id, platform, url) VALUES (?, ?, ?, ?)').run(projectId, ownerId, platform, url.trim());
-  res.status(201).json({ video: db.prepare('SELECT * FROM videos WHERE id = ?').get(result.lastInsertRowid) });
+  const result = await db.prepare('INSERT INTO videos (project_id, owner_user_id, platform, url) VALUES (?, ?, ?, ?)').run(projectId, ownerId, platform, url.trim());
+  res.status(201).json({ video: await db.prepare('SELECT * FROM videos WHERE id = ?').get(result.lastInsertRowid) });
 });
 
 router.post('/:id/refresh', requireRole('admin', 'influencer', 'rapmedia'), async (req, res, next) => {
   try {
-    const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
+    const video = await db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
     if (!video) return res.status(404).json({ error: 'Video bulunamadı' });
     if (req.user.role !== 'admin' && video.owner_user_id !== req.user.id) return res.status(403).json({ error: 'Bu videoya erişim yetkiniz yok' });
     res.json({ result: await refreshVideo(video) });

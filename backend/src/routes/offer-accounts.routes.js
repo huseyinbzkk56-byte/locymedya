@@ -43,7 +43,7 @@ function platformFields(input) {
 
 router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search = '', category = '', platform = '' } = req.query;
   const clauses = [];
   const params = [];
@@ -60,17 +60,17 @@ router.get('/', (req, res) => {
   if (platform === 'tiktok') clauses.push('tiktok_url IS NOT NULL');
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const accounts = db.prepare(`SELECT * FROM offer_accounts ${where} ORDER BY created_at DESC, id DESC`).all(...params);
+  const accounts = await db.prepare(`SELECT * FROM offer_accounts ${where} ORDER BY created_at DESC, id DESC`).all(...params);
   res.json({ accounts });
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const error = validateAccount(req.body);
   if (error) return res.status(400).json({ error });
 
   const ig = platformFields(req.body.instagram);
   const tt = platformFields(req.body.tiktok);
-  const result = db.prepare(`
+  const result = await db.prepare(`
     INSERT INTO offer_accounts
       (name, category, instagram_url, instagram_followers, instagram_normal_price, instagram_client_price,
        tiktok_url, tiktok_followers, tiktok_normal_price, tiktok_client_price)
@@ -81,16 +81,16 @@ router.post('/', (req, res) => {
     tt.url, tt.followers, tt.normalPrice, tt.clientPrice
   );
 
-  res.status(201).json({ account: db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(result.lastInsertRowid) });
+  res.status(201).json({ account: await db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(result.lastInsertRowid) });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const error = validateAccount(req.body);
   if (error) return res.status(400).json({ error });
 
   const ig = platformFields(req.body.instagram);
   const tt = platformFields(req.body.tiktok);
-  const result = db.prepare(`
+  const result = await db.prepare(`
     UPDATE offer_accounts SET
       name = ?, category = ?,
       instagram_url = ?, instagram_followers = ?, instagram_normal_price = ?, instagram_client_price = ?,
@@ -105,14 +105,14 @@ router.put('/:id', (req, res) => {
   );
 
   if (!result.changes) return res.status(404).json({ error: 'Hesap bulunamadı' });
-  res.json({ account: db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(req.params.id) });
+  res.json({ account: await db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(req.params.id) });
 });
 
-router.delete('/:id', (req, res) => {
-  const usedInOffer = db.prepare('SELECT COUNT(*) AS count FROM offer_list_items WHERE media_account_id = ?').get(req.params.id).count;
+router.delete('/:id', async (req, res) => {
+  const usedInOffer = (await db.prepare('SELECT COUNT(*) AS count FROM offer_list_items WHERE media_account_id = ?').get(req.params.id)).count;
   if (usedInOffer) return res.status(400).json({ error: 'Bu hesap bir veya daha fazla teklifte kullanılıyor, önce tekliflerden kaldırın' });
 
-  const result = db.prepare('DELETE FROM offer_accounts WHERE id = ?').run(req.params.id);
+  const result = await db.prepare('DELETE FROM offer_accounts WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Hesap bulunamadı' });
   res.status(204).end();
 });

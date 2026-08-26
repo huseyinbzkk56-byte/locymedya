@@ -272,37 +272,40 @@ function createDoc(res, filename, pdfTitle, brand) {
   return doc;
 }
 
-function getBrand() {
-  return { headerTitle: getPdfHeaderTitle(), headerSubtitle: getPdfHeaderSubtitle() };
+async function getBrand() {
+  return { headerTitle: await getPdfHeaderTitle(), headerSubtitle: await getPdfHeaderSubtitle() };
 }
 
 const LINK_SELECT = 'title, url, preview_title, preview_image, screenshot_url, stats_views, stats_likes, stats_comments';
 
-router.get('/brand-title', authenticate, requireRole('admin'), (req, res) => {
-  res.json({ brandTitle: getPdfBrandTitle(), headerTitle: getPdfHeaderTitle(), headerSubtitle: getPdfHeaderSubtitle() });
+router.get('/brand-title', authenticate, requireRole('admin'), async (req, res) => {
+  res.json({ brandTitle: await getPdfBrandTitle(), headerTitle: await getPdfHeaderTitle(), headerSubtitle: await getPdfHeaderSubtitle() });
 });
 
-router.put('/brand-title', authenticate, requireRole('admin'), (req, res) => {
-  if (req.body.brandTitle !== undefined) setPdfBrandTitle(req.body.brandTitle);
-  if (req.body.headerTitle !== undefined) setPdfHeaderTitle(req.body.headerTitle);
-  if (req.body.headerSubtitle !== undefined) setPdfHeaderSubtitle(req.body.headerSubtitle);
-  res.json({ brandTitle: getPdfBrandTitle(), headerTitle: getPdfHeaderTitle(), headerSubtitle: getPdfHeaderSubtitle() });
+router.put('/brand-title', authenticate, requireRole('admin'), async (req, res) => {
+  if (req.body.brandTitle !== undefined) await setPdfBrandTitle(req.body.brandTitle);
+  if (req.body.headerTitle !== undefined) await setPdfHeaderTitle(req.body.headerTitle);
+  if (req.body.headerSubtitle !== undefined) await setPdfHeaderSubtitle(req.body.headerSubtitle);
+  res.json({ brandTitle: await getPdfBrandTitle(), headerTitle: await getPdfHeaderTitle(), headerSubtitle: await getPdfHeaderSubtitle() });
 });
 
 router.get('/all.pdf', authenticate, requireRole('admin'), async (req, res) => {
-  const counts = db.prepare('SELECT platform, COUNT(*) as cnt FROM links WHERE archived = 0 GROUP BY platform ORDER BY cnt DESC, platform ASC').all();
-  const brandTitle = getPdfBrandTitle();
-  const brand = getBrand();
+  const counts = await db.prepare('SELECT platform, COUNT(*) as cnt FROM links WHERE archived = 0 GROUP BY platform ORDER BY cnt DESC, platform ASC').all();
+  const brandTitle = await getPdfBrandTitle();
+  const brand = await getBrand();
   const platformsInOrder = counts.map((row) => row.platform).filter((key) => PLATFORMS[key]);
 
   if (!platformsInOrder.length) {
     return res.status(400).json({ error: 'Henüz hiç link eklenmedi' });
   }
 
-  const sections = platformsInOrder.map((platformKey) => ({
-    platformKey,
-    links: db.prepare(`SELECT ${LINK_SELECT} FROM links WHERE platform = ? AND archived = 0 ORDER BY created_at ASC, id ASC`).all(platformKey)
-  }));
+  const sections = [];
+  for (const platformKey of platformsInOrder) {
+    sections.push({
+      platformKey,
+      links: await db.prepare(`SELECT ${LINK_SELECT} FROM links WHERE platform = ? AND archived = 0 ORDER BY created_at ASC, id ASC`).all(platformKey)
+    });
+  }
 
   const doc = createDoc(res, 'locy-medya-tum-calismalar.pdf', brandTitle ? `${brandTitle.toUpperCase()} PR ÇALIŞMALARI` : 'PR ÇALIŞMALARI', brand);
   const imageMap = await preloadImages(doc, sections.flatMap((s) => s.links));
@@ -321,9 +324,9 @@ router.get('/:platform.pdf', authenticate, requireRole('admin'), async (req, res
   const config = PLATFORMS[platform];
   if (!config) return res.status(400).json({ error: 'Geçersiz platform' });
 
-  const links = db.prepare(`SELECT ${LINK_SELECT} FROM links WHERE platform = ? AND archived = 0 ORDER BY created_at ASC, id ASC`).all(platform);
-  const brandTitle = getPdfBrandTitle();
-  const brand = getBrand();
+  const links = await db.prepare(`SELECT ${LINK_SELECT} FROM links WHERE platform = ? AND archived = 0 ORDER BY created_at ASC, id ASC`).all(platform);
+  const brandTitle = await getPdfBrandTitle();
+  const brand = await getBrand();
   const title = sectionTitle(brandTitle, config);
   const doc = createDoc(res, `locy-medya-${platform}-sunumu.pdf`, title, brand);
   const imageMap = await preloadImages(doc, links);

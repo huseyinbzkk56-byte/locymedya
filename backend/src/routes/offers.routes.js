@@ -51,8 +51,8 @@ function totalNormalPrice(row) {
 }
 
 // PDF ve /public/:token ile aynı — müşteriye asla normal fiyat/admin verisi sızmasın
-function getClientSafeItems(offerId) {
-  const rows = db.prepare(
+async function getClientSafeItems(offerId) {
+  const rows = await db.prepare(
     `SELECT oli.client_price, oli.sort_order, oa.name, oa.category,
             oa.instagram_url, oa.instagram_followers, oa.tiktok_url, oa.tiktok_followers
      FROM offer_list_items oli
@@ -71,8 +71,8 @@ function getClientSafeItems(offerId) {
   }));
 }
 
-function getOfferItemsAdmin(offerId) {
-  const rows = db.prepare(
+async function getOfferItemsAdmin(offerId) {
+  const rows = await db.prepare(
     `SELECT oli.id AS item_id, oli.client_price, oli.sort_order, oa.*
      FROM offer_list_items oli
      JOIN offer_accounts oa ON oa.id = oli.media_account_id
@@ -95,11 +95,11 @@ function getOfferItemsAdmin(offerId) {
 
 // ---- Public: müşteri teklif görünümü (kimlik doğrulama gerektirmez) ----
 // Sadece müşteriye gösterilmesi gereken alanlar döndürülür — normal fiyat, admin bilgisi asla dahil edilmez.
-router.get('/public/:token', (req, res) => {
-  const offer = db.prepare('SELECT id, name, client_name, status FROM offer_lists WHERE public_token = ?').get(req.params.token);
+router.get('/public/:token', async (req, res) => {
+  const offer = await db.prepare('SELECT id, name, client_name, status FROM offer_lists WHERE public_token = ?').get(req.params.token);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
 
-  const rows = db.prepare(
+  const rows = await db.prepare(
     `SELECT oli.client_price, oli.sort_order, oa.name, oa.category,
             oa.instagram_url, oa.instagram_followers, oa.tiktok_url, oa.tiktok_followers
      FROM offer_list_items oli
@@ -129,30 +129,30 @@ router.get('/public/:token', (req, res) => {
 // ---- Bundan sonrası sadece admin ----
 router.use(authenticate, requireRole('admin'), requireFullAdmin);
 
-router.get('/', (req, res) => {
-  const offers = db.prepare(
+router.get('/', async (req, res) => {
+  const offers = await db.prepare(
     `SELECT ol.*, (SELECT COUNT(*) FROM offer_list_items WHERE offer_id = ol.id) AS item_count
      FROM offer_lists ol ORDER BY ol.created_at DESC, ol.id DESC`
   ).all();
   res.json({ offers });
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const name = String(req.body.name || '').trim();
   const clientName = String(req.body.clientName || '').trim();
   if (!name || !clientName) return res.status(400).json({ error: 'Teklif adı ve müşteri adı zorunlu' });
 
   let token;
-  do { token = generateToken(); } while (db.prepare('SELECT 1 FROM offer_lists WHERE public_token = ?').get(token));
+  do { token = generateToken(); } while (await db.prepare('SELECT 1 FROM offer_lists WHERE public_token = ?').get(token));
 
-  const result = db.prepare('INSERT INTO offer_lists (name, client_name, public_token) VALUES (?, ?, ?)').run(name, clientName, token);
-  res.status(201).json({ offer: db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(result.lastInsertRowid) });
+  const result = await db.prepare('INSERT INTO offer_lists (name, client_name, public_token) VALUES (?, ?, ?)').run(name, clientName, token);
+  res.status(201).json({ offer: await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(result.lastInsertRowid) });
 });
 
-router.get('/:id/pdf', (req, res) => {
-  const offer = db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id);
+router.get('/:id/pdf', async (req, res) => {
+  const offer = await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
-  const items = getClientSafeItems(offer.id);
+  const items = await getClientSafeItems(offer.id);
 
   const totals = {
     accountCount: items.length,
@@ -160,8 +160,8 @@ router.get('/:id/pdf', (req, res) => {
     totalBudget: items.reduce((sum, item) => sum + item.clientPrice, 0)
   };
 
-  const brandTitle = getPdfHeaderTitle();
-  const brandSubtitle = getPdfHeaderSubtitle();
+  const brandTitle = await getPdfHeaderTitle();
+  const brandSubtitle = await getPdfHeaderSubtitle();
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="teklif-${offer.id}.pdf"`);
@@ -231,73 +231,73 @@ router.get('/:id/pdf', (req, res) => {
   doc.end();
 });
 
-router.get('/:id', (req, res) => {
-  const offer = db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const offer = await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
-  res.json({ offer, items: getOfferItemsAdmin(offer.id) });
+  res.json({ offer, items: await getOfferItemsAdmin(offer.id) });
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const name = String(req.body.name || '').trim();
   const clientName = String(req.body.clientName || '').trim();
   const status = String(req.body.status || 'draft');
   if (!name || !clientName) return res.status(400).json({ error: 'Teklif adı ve müşteri adı zorunlu' });
   if (!STATUSES.has(status)) return res.status(400).json({ error: 'Geçersiz durum' });
 
-  const result = db.prepare(
+  const result = await db.prepare(
     "UPDATE offer_lists SET name = ?, client_name = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(name, clientName, status, req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Teklif bulunamadı' });
-  res.json({ offer: db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id) });
+  res.json({ offer: await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id) });
 });
 
-router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM offer_lists WHERE id = ?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  const result = await db.prepare('DELETE FROM offer_lists WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Teklif bulunamadı' });
   res.status(204).end();
 });
 
-router.post('/:id/items', (req, res) => {
-  const offer = db.prepare('SELECT id FROM offer_lists WHERE id = ?').get(req.params.id);
+router.post('/:id/items', async (req, res) => {
+  const offer = await db.prepare('SELECT id FROM offer_lists WHERE id = ?').get(req.params.id);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
 
   const mediaAccountId = Number(req.body.mediaAccountId);
-  const account = db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(mediaAccountId);
+  const account = await db.prepare('SELECT * FROM offer_accounts WHERE id = ?').get(mediaAccountId);
   if (!account) return res.status(400).json({ error: 'Hesap bulunamadı' });
 
-  const alreadyAdded = db.prepare('SELECT 1 FROM offer_list_items WHERE offer_id = ? AND media_account_id = ?').get(offer.id, mediaAccountId);
+  const alreadyAdded = await db.prepare('SELECT 1 FROM offer_list_items WHERE offer_id = ? AND media_account_id = ?').get(offer.id, mediaAccountId);
   if (alreadyAdded) return res.status(400).json({ error: 'Bu hesap zaten teklifte mevcut' });
 
   const clientPrice = req.body.clientPrice !== undefined ? Number(req.body.clientPrice) : defaultClientPrice(account);
   if (!Number.isFinite(clientPrice) || clientPrice < 0) return res.status(400).json({ error: 'Müşteri fiyatı geçerli bir değer olmalı' });
 
-  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max FROM offer_list_items WHERE offer_id = ?').get(offer.id).max;
-  const result = db.prepare(
+  const maxOrder = (await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max FROM offer_list_items WHERE offer_id = ?').get(offer.id)).max;
+  const result = await db.prepare(
     'INSERT INTO offer_list_items (offer_id, media_account_id, client_price, sort_order) VALUES (?, ?, ?, ?)'
   ).run(offer.id, mediaAccountId, clientPrice, maxOrder + 1);
 
-  db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(offer.id);
-  res.status(201).json({ items: getOfferItemsAdmin(offer.id), itemId: result.lastInsertRowid });
+  await db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(offer.id);
+  res.status(201).json({ items: await getOfferItemsAdmin(offer.id), itemId: result.lastInsertRowid });
 });
 
-router.put('/:id/items/:itemId', (req, res) => {
-  const item = db.prepare('SELECT * FROM offer_list_items WHERE id = ? AND offer_id = ?').get(req.params.itemId, req.params.id);
+router.put('/:id/items/:itemId', async (req, res) => {
+  const item = await db.prepare('SELECT * FROM offer_list_items WHERE id = ? AND offer_id = ?').get(req.params.itemId, req.params.id);
   if (!item) return res.status(404).json({ error: 'Kalem bulunamadı' });
 
   const clientPrice = req.body.clientPrice !== undefined ? Number(req.body.clientPrice) : item.client_price;
   const sortOrder = req.body.sortOrder !== undefined ? Number(req.body.sortOrder) : item.sort_order;
   if (!Number.isFinite(clientPrice) || clientPrice < 0) return res.status(400).json({ error: 'Müşteri fiyatı geçerli bir değer olmalı' });
 
-  db.prepare('UPDATE offer_list_items SET client_price = ?, sort_order = ? WHERE id = ?').run(clientPrice, sortOrder, item.id);
-  db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
-  res.json({ items: getOfferItemsAdmin(req.params.id) });
+  await db.prepare('UPDATE offer_list_items SET client_price = ?, sort_order = ? WHERE id = ?').run(clientPrice, sortOrder, item.id);
+  await db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
+  res.json({ items: await getOfferItemsAdmin(req.params.id) });
 });
 
-router.delete('/:id/items/:itemId', (req, res) => {
-  const result = db.prepare('DELETE FROM offer_list_items WHERE id = ? AND offer_id = ?').run(req.params.itemId, req.params.id);
+router.delete('/:id/items/:itemId', async (req, res) => {
+  const result = await db.prepare('DELETE FROM offer_list_items WHERE id = ? AND offer_id = ?').run(req.params.itemId, req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Kalem bulunamadı' });
-  db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
-  res.json({ items: getOfferItemsAdmin(req.params.id) });
+  await db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
+  res.json({ items: await getOfferItemsAdmin(req.params.id) });
 });
 
 module.exports = router;
