@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm install --build-from-source=better-sqlite3
+    buildCommand: rm -rf node_modules && npm install --build-from-source=better-sqlite3
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
