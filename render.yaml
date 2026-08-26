@@ -4,14 +4,12 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm install --build-from-source=better-sqlite3
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: JWT_SECRET
         generateValue: true
-      - key: NODE_VERSION
-        value: 20.11.0
 
   - type: web
     name: locymedya-frontend
