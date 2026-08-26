@@ -1,0 +1,3 @@
+import Layout from '../components/Layout';
+import { getCurrentUser } from '../api/client';
+export default function Profile() { const user = getCurrentUser(); return <Layout title="Profil"><div className="max-w-xl mx-auto rounded-xl border border-gray-200 p-5"><p className="text-xs uppercase tracking-wide text-gray-500">Hesap</p><h1 className="mt-2 text-2xl font-semibold">{user?.displayName || user?.username}</h1><p className="mt-2 text-sm text-gray-500">Kullanıcı adı: {user?.username}</p><p className="mt-1 text-sm text-gray-500">Rol: {user?.role}</p><p className="mt-6 text-sm text-gray-400">Şifre sıfırlama işlemi admin tarafından yönetilir.</p></div></Layout>; }
