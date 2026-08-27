@@ -1,8 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
-const fs = require('fs');
-const path = require('path');
 const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
+const { destroyByUrl } = require('../services/storage.service');
 
 const router = express.Router();
 router.use(authenticate);
@@ -33,9 +32,8 @@ router.delete('/:id', requireRole('admin'), requireFullAdmin, async (req, res) =
   const song = await db.prepare('SELECT cover_url, audio_url FROM songs WHERE id = ?').get(req.params.id);
   const result = await db.prepare('DELETE FROM songs WHERE id = ?').run(req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Şarkı bulunamadı' });
-  for (const storedUrl of [song.cover_url, song.audio_url]) {
-    if (storedUrl?.startsWith('/uploads/')) fs.rmSync(path.join(__dirname, '../../data', storedUrl.replace('/uploads/', '')), { force: true });
-  }
+  await destroyByUrl(song.cover_url, 'locymedya/covers', 'image');
+  await destroyByUrl(song.audio_url, 'locymedya/audio', 'video');
   res.status(204).end();
 });
 

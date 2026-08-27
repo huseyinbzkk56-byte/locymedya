@@ -1,25 +1,21 @@
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const db = require('../db/db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { PLATFORMS, detectPlatform } = require('../utils/platform');
 const { fetchPublicMetrics } = require('../services/apify.service');
+const { uploadBuffer, destroyByUrl } = require('../services/storage.service');
 
 const router = express.Router();
 const STATS_PLATFORMS = new Set(['instagram', 'tiktok']);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const screenshotDir = path.join(__dirname, '../../data/link-screenshots');
-fs.mkdirSync(screenshotDir, { recursive: true });
+const SCREENSHOT_FOLDER = 'locymedya/link-screenshots';
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const screenshotUpload = multer({
-  storage: multer.diskStorage({
-    destination: screenshotDir,
-    filename: (req, file, callback) => callback(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname).toLowerCase()}`)
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, callback) => {
     const allowed = allowedTypes.has(file.mimetype) && allowedExtensions.has(path.extname(file.originalname).toLowerCase());
@@ -114,14 +110,10 @@ router.post('/refresh-stats', requireRole('admin'), async (req, res) => {
 router.post('/:id/screenshot', requireRole('admin'), screenshotUpload.single('screenshot'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Ekran görüntüsü zorunlu' });
   const link = await db.prepare('SELECT id, screenshot_url FROM links WHERE id = ?').get(req.params.id);
-  if (!link) {
-    fs.rmSync(req.file.path, { force: true });
-    return res.status(404).json({ error: 'Link bulunamadı' });
-  }
-  if (link.screenshot_url?.startsWith('/uploads/link-screenshots/')) {
-    fs.rmSync(path.join(screenshotDir, path.basename(link.screenshot_url)), { force: true });
-  }
-  const screenshotUrl = `/uploads/link-screenshots/${req.file.filename}`;
+  if (!link) return res.status(404).json({ error: 'Link bulunamadı' });
+  const result = await uploadBuffer(req.file.buffer, { folder: SCREENSHOT_FOLDER, resourceType: 'image' });
+  await destroyByUrl(link.screenshot_url, SCREENSHOT_FOLDER, 'image');
+  const screenshotUrl = result.secure_url;
   await db.prepare('UPDATE links SET screenshot_url = ? WHERE id = ?').run(screenshotUrl, link.id);
   res.json({ link: await db.prepare('SELECT * FROM links WHERE id = ?').get(link.id) });
 });
@@ -129,9 +121,7 @@ router.post('/:id/screenshot', requireRole('admin'), screenshotUpload.single('sc
 router.delete('/:id/screenshot', requireRole('admin'), async (req, res) => {
   const link = await db.prepare('SELECT id, screenshot_url FROM links WHERE id = ?').get(req.params.id);
   if (!link) return res.status(404).json({ error: 'Link bulunamadı' });
-  if (link.screenshot_url?.startsWith('/uploads/link-screenshots/')) {
-    fs.rmSync(path.join(screenshotDir, path.basename(link.screenshot_url)), { force: true });
-  }
+  await destroyByUrl(link.screenshot_url, SCREENSHOT_FOLDER, 'image');
   await db.prepare('UPDATE links SET screenshot_url = NULL WHERE id = ?').run(link.id);
   res.json({ link: await db.prepare('SELECT * FROM links WHERE id = ?').get(link.id) });
 });
