@@ -66,8 +66,8 @@ async function getClientSafeItems(offerId) {
     category: row.category,
     followers: totalFollowers(row),
     clientPrice: row.client_price,
-    instagram: row.instagram_url ? { followers: row.instagram_followers } : null,
-    tiktok: row.tiktok_url ? { followers: row.tiktok_followers } : null
+    instagram: row.instagram_url ? { profileUrl: row.instagram_url, followers: row.instagram_followers } : null,
+    tiktok: row.tiktok_url ? { profileUrl: row.tiktok_url, followers: row.tiktok_followers } : null
   }));
 }
 
@@ -201,16 +201,28 @@ router.get('/:id/pdf', async (req, res) => {
 
   const contentBottom = () => doc.page.height - PAGE_MARGIN - 40;
   items.forEach((item, index) => {
-    const platformParts = [];
-    if (item.instagram) platformParts.push(`Instagram ${item.instagram.followers.toLocaleString('tr-TR')}`);
-    if (item.tiktok) platformParts.push(`TikTok ${item.tiktok.followers.toLocaleString('tr-TR')}`);
+    const platforms = [];
+    if (item.instagram) platforms.push({ label: 'Instagram', url: item.instagram.profileUrl, followers: item.instagram.followers });
+    if (item.tiktok) platforms.push({ label: 'TikTok', url: item.tiktok.profileUrl, followers: item.tiktok.followers });
     const rowH = 48;
     if (doc.y + rowH > contentBottom()) { doc.addPage(); paintBg(); doc.y = PAGE_MARGIN; }
     const y = doc.y;
     doc.roundedRect(PAGE_MARGIN, y, pageWidth(), rowH, 10).lineWidth(1).fillAndStroke(COLOR.cardBg, COLOR.cardBorder);
     doc.font('Manrope').fontSize(9).fillColor(COLOR.textMuted).text(String(index + 1).padStart(2, '0'), PAGE_MARGIN + 14, y + 10, { continued: false });
     doc.font('Manrope').fontSize(12).fillColor(COLOR.textPrimary).text(item.name, PAGE_MARGIN + 40, y + 9, { width: pageWidth() * 0.4 });
-    doc.font('Manrope').fontSize(8.5).fillColor(COLOR.textSecondary).text(`${CATEGORY_LABEL[item.category] || item.category} · ${platformParts.join(' · ') || 'Platform yok'}`, PAGE_MARGIN + 40, y + 26, { width: pageWidth() * 0.5 });
+
+    doc.font('Manrope').fontSize(8.5).fillColor(COLOR.textSecondary)
+      .text(`${CATEGORY_LABEL[item.category] || item.category} · `, PAGE_MARGIN + 40, y + 26, { continued: platforms.length > 0, width: pageWidth() * 0.5 });
+    if (!platforms.length) {
+      doc.text('Platform yok', { continued: false });
+    } else {
+      platforms.forEach((platform, i) => {
+        doc.fillColor(COLOR.accent).text(platform.label, { continued: true, underline: true, link: platform.url });
+        const isLast = i === platforms.length - 1;
+        doc.fillColor(COLOR.textSecondary).text(` ${platform.followers.toLocaleString('tr-TR')}${isLast ? '' : ' · '}`, { continued: !isLast, underline: false });
+      });
+    }
+
     doc.font('Manrope').fontSize(13).fillColor(COLOR.accent).text(`${item.clientPrice.toLocaleString('tr-TR')} TL`, PAGE_MARGIN, y + 16, { width: pageWidth() - 20, align: 'right' });
     doc.y = y + rowH + 10;
   });
