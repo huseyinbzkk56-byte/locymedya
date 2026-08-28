@@ -61,14 +61,15 @@ async function getClientSafeItems(offerId) {
      ORDER BY oli.sort_order ASC, oli.id ASC`
   ).all(offerId);
 
-  return rows.map((row) => ({
+  const autoBudget = rows.reduce((sum, row) => sum + row.client_price, 0);
+  const items = rows.map((row) => ({
     name: row.name,
     category: row.category,
     followers: totalFollowers(row),
-    clientPrice: row.client_price,
     instagram: row.instagram_url ? { profileUrl: row.instagram_url, followers: row.instagram_followers } : null,
     tiktok: row.tiktok_url ? { profileUrl: row.tiktok_url, followers: row.tiktok_followers } : null
   }));
+  return { items, autoBudget };
 }
 
 async function getOfferItemsAdmin(offerId) {
@@ -96,7 +97,7 @@ async function getOfferItemsAdmin(offerId) {
 // ---- Public: müşteri teklif görünümü (kimlik doğrulama gerektirmez) ----
 // Sadece müşteriye gösterilmesi gereken alanlar döndürülür — normal fiyat, admin bilgisi asla dahil edilmez.
 router.get('/public/:token', async (req, res) => {
-  const offer = await db.prepare('SELECT id, name, client_name, status FROM offer_lists WHERE public_token = ?').get(req.params.token);
+  const offer = await db.prepare('SELECT id, name, client_name, status, total_price FROM offer_lists WHERE public_token = ?').get(req.params.token);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
 
   const rows = await db.prepare(
@@ -112,15 +113,15 @@ router.get('/public/:token', async (req, res) => {
     name: row.name,
     category: row.category,
     followers: totalFollowers(row),
-    clientPrice: row.client_price,
     instagram: row.instagram_url ? { profileUrl: row.instagram_url, followers: row.instagram_followers } : null,
     tiktok: row.tiktok_url ? { profileUrl: row.tiktok_url, followers: row.tiktok_followers } : null
   }));
 
+  const autoBudget = rows.reduce((sum, row) => sum + row.client_price, 0);
   const totals = {
     accountCount: items.length,
     totalFollowers: items.reduce((sum, item) => sum + item.followers, 0),
-    totalBudget: items.reduce((sum, item) => sum + item.clientPrice, 0)
+    totalBudget: offer.total_price ?? autoBudget
   };
 
   res.json({ name: offer.name, clientName: offer.client_name, items, totals });
@@ -152,12 +153,12 @@ router.post('/', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   const offer = await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id);
   if (!offer) return res.status(404).json({ error: 'Teklif bulunamadı' });
-  const items = await getClientSafeItems(offer.id);
+  const { items, autoBudget } = await getClientSafeItems(offer.id);
 
   const totals = {
     accountCount: items.length,
     totalFollowers: items.reduce((sum, item) => sum + item.followers, 0),
-    totalBudget: items.reduce((sum, item) => sum + item.clientPrice, 0)
+    totalBudget: offer.total_price ?? autoBudget
   };
 
   const brandTitle = await getPdfHeaderTitle();
@@ -223,7 +224,6 @@ router.get('/:id/pdf', async (req, res) => {
       });
     }
 
-    doc.font('Manrope').fontSize(13).fillColor(COLOR.accent).text(`${item.clientPrice.toLocaleString('tr-TR')} TL`, PAGE_MARGIN, y + 16, { width: pageWidth() - 20, align: 'right' });
     doc.y = y + rowH + 10;
   });
 
@@ -256,9 +256,15 @@ router.put('/:id', async (req, res) => {
   if (!name || !clientName) return res.status(400).json({ error: 'Teklif adı ve müşteri adı zorunlu' });
   if (!STATUSES.has(status)) return res.status(400).json({ error: 'Geçersiz durum' });
 
+  let totalPrice = null;
+  if (req.body.totalPrice !== undefined && req.body.totalPrice !== '' && req.body.totalPrice !== null) {
+    totalPrice = Number(req.body.totalPrice);
+    if (!Number.isFinite(totalPrice) || totalPrice < 0) return res.status(400).json({ error: 'Teklif fiyatı geçerli bir değer olmalı' });
+  }
+
   const result = await db.prepare(
-    "UPDATE offer_lists SET name = ?, client_name = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(name, clientName, status, req.params.id);
+    "UPDATE offer_lists SET name = ?, client_name = ?, status = ?, total_price = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(name, clientName, status, totalPrice, req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Teklif bulunamadı' });
   res.json({ offer: await db.prepare('SELECT * FROM offer_lists WHERE id = ?').get(req.params.id) });
 });

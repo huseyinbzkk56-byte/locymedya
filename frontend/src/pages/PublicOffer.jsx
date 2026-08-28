@@ -90,7 +90,6 @@ export default function PublicOffer() {
                         {item.tiktok && <p>TikTok: {formatFollowers(item.tiktok.followers)}</p>}
                         {item.instagram && item.tiktok && <p className="font-medium text-gray-700">Toplam: {formatFollowers(item.followers)}</p>}
                       </div>
-                      <p className="offer-card-price">{formatCurrency(item.clientPrice)}</p>
                       <div className="mt-3 flex gap-2">
                         {item.instagram && (
                           <a href={item.instagram.profileUrl} target="_blank" rel="noreferrer" aria-label={`${item.name} Instagram`} className="offer-platform-icon instagram">

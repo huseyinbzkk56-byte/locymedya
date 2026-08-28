@@ -228,6 +228,8 @@ async function runInit() {
     `);
   }
 
+  await addColumnIfMissing('offer_lists', 'total_price', 'REAL');
+
   // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır
   await db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('view_payment_rate', '0.0015')").run();
 }

@@ -16,7 +16,7 @@ export default function OfferDetail() {
   const { id } = useParams();
   const [offer, setOffer] = useState(null);
   const [items, setItems] = useState([]);
-  const [meta, setMeta] = useState({ name: '', clientName: '', status: 'draft' });
+  const [meta, setMeta] = useState({ name: '', clientName: '', status: 'draft', totalPrice: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -31,7 +31,7 @@ export default function OfferDetail() {
     const data = await apiFetch(`/offers/${id}`);
     setOffer(data.offer);
     setItems(data.items);
-    setMeta({ name: data.offer.name, clientName: data.offer.client_name, status: data.offer.status });
+    setMeta({ name: data.offer.name, clientName: data.offer.client_name, status: data.offer.status, totalPrice: data.offer.total_price ?? '' });
   }
 
   useEffect(() => { load().catch((err) => setError(err.message)); }, [id]);
@@ -131,9 +131,10 @@ export default function OfferDetail() {
         <Link to="/admin/links" className="text-sm text-gray-500 hover:text-gray-900">← Link Listesi</Link>
 
         <form onSubmit={saveMeta} className="mt-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-[1.3fr,1fr,auto,auto]">
+          <div className="grid gap-3 sm:grid-cols-[1.3fr,1fr,auto,auto,auto]">
             <input required value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} placeholder="Teklif adı" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
             <input required value={meta.clientName} onChange={(e) => setMeta({ ...meta, clientName: e.target.value })} placeholder="Müşteri adı" className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
+            <input type="number" min="0" step="0.01" value={meta.totalPrice} onChange={(e) => setMeta({ ...meta, totalPrice: e.target.value })} placeholder="Teklif fiyatı (TL)" className="w-40 rounded-lg border border-gray-200 px-3 py-2.5 text-sm" />
             <select value={meta.status} onChange={(e) => setMeta({ ...meta, status: e.target.value })} className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm">
               <option value="draft">Taslak</option>
               <option value="sent">Gönderildi</option>
@@ -141,6 +142,7 @@ export default function OfferDetail() {
             </select>
             <button disabled={saving} className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
           </div>
+          <p className="mt-2 text-xs text-gray-400">Teklif fiyatı boş bırakılırsa, müşteriye hesap fiyatlarının toplamı gösterilir. Doldurursan müşteri sadece bu tek fiyatı görür — hesap bazlı fiyatlar müşteriye hiç gösterilmez, sadece aşağıdaki tabloda senin takibin için durur.</p>
         </form>
 
         <div className="mt-4 flex flex-col gap-2 rounded-xl border border-purple-100 bg-purple-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -157,10 +159,11 @@ export default function OfferDetail() {
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-2xl font-semibold">{items.length}</p><p className="text-xs text-gray-500 mt-1">Hesap</p></div>
           <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-2xl font-semibold">{totalFollowers.toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500 mt-1">Toplam Takipçi</p></div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-2xl font-semibold">{totalClient.toLocaleString('tr-TR')} TL</p><p className="text-xs text-gray-500 mt-1">Müşteri Bütçesi <span className="text-gray-400">(normal: {totalNormal.toLocaleString('tr-TR')} TL)</span></p></div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4"><p className="text-2xl font-semibold">{totalClient.toLocaleString('tr-TR')} TL</p><p className="text-xs text-gray-500 mt-1">Hesap Fiyatları Toplamı <span className="text-gray-400">(normal: {totalNormal.toLocaleString('tr-TR')} TL)</span></p></div>
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4"><p className="text-2xl font-semibold text-purple-900">{(meta.totalPrice !== '' ? Number(meta.totalPrice) : totalClient).toLocaleString('tr-TR')} TL</p><p className="text-xs text-purple-500 mt-1">Müşterinin Gördüğü Fiyat</p></div>
         </div>
 
         <h2 className="mt-8 text-lg font-semibold">Teklifteki Hesaplar</h2>
