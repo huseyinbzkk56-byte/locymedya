@@ -3,7 +3,7 @@ const db = require('../db/db');
 const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const CATEGORIES = new Set(['influencer', 'rapmedia', 'dizi']);
+const CATEGORIES = new Set(['influencer', 'rapmedia', 'dizi', 'futbol', 'araba']);
 
 function validatePlatform(input, label) {
   if (!input || !input.enabled) return null;
@@ -22,7 +22,7 @@ function validateAccount(body) {
   const name = String(body.name || '').trim();
   const category = String(body.category || '').trim();
   if (!name || name.length > 120) return 'Hesap/sayfa adı zorunlu ve 120 karakterden kısa olmalı';
-  if (!CATEGORIES.has(category)) return 'Kategori Influencer, Türkçe Rap Medyası veya Dizi Edit Sayfası olmalı';
+  if (!CATEGORIES.has(category)) return 'Kategori Influencer, Türkçe Rap Medyası, Dizi Edit Sayfası, Futbol Edit veya Araba Edit olmalı';
 
   const instagramEnabled = !!body.instagram?.enabled;
   const tiktokEnabled = !!body.tiktok?.enabled;

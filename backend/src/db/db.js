@@ -228,6 +228,33 @@ async function runInit() {
     `);
   }
 
+  // offer_accounts.category CHECK kısıtlaması eski ise genişlet — "Futbol Edit" ve "Araba Edit" kategorileri eklenebilsin
+  const offerAccountsSql2 = await tableSql('offer_accounts');
+  if (offerAccountsSql2 && !offerAccountsSql2.includes('futbol')) {
+    await db.exec(`
+      PRAGMA foreign_keys=OFF;
+      CREATE TABLE offer_accounts_new3 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('influencer','rapmedia','dizi','futbol','araba')),
+        instagram_url TEXT,
+        instagram_followers INTEGER,
+        instagram_normal_price REAL,
+        instagram_client_price REAL,
+        tiktok_url TEXT,
+        tiktok_followers INTEGER,
+        tiktok_normal_price REAL,
+        tiktok_client_price REAL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO offer_accounts_new3 SELECT * FROM offer_accounts;
+      DROP TABLE offer_accounts;
+      ALTER TABLE offer_accounts_new3 RENAME TO offer_accounts;
+      PRAGMA foreign_keys=ON;
+    `);
+  }
+
   await addColumnIfMissing('offer_lists', 'total_price', 'REAL');
 
   // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır

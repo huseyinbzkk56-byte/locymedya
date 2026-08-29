@@ -4,7 +4,7 @@ import Layout from '../components/Layout';
 import { apiFetch } from '../api/client';
 import { InstagramIcon, TikTokIcon } from '../components/PlatformIcons';
 
-const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası' };
+const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası', futbol: 'Futbol Edit', araba: 'Araba Edit' };
 const PUBLIC_BASE = window.location.origin;
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -202,7 +202,7 @@ export default function OfferDetail() {
           <input placeholder="Hesap ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm sm:max-w-xs" />
           <div className="flex flex-wrap gap-2">
             <div className="flex gap-1 rounded-lg border border-gray-200 bg-white p-1 text-xs">
-              {[['', 'Tümü'], ['influencer', 'Influencer'], ['rapmedia', 'Türkçe Rap Medyası'], ['dizi', 'Dizi Edit Sayfası']].map(([value, label]) => (
+              {[['', 'Tümü'], ['influencer', 'Influencer'], ['rapmedia', 'Türkçe Rap Medyası'], ['dizi', 'Dizi Edit Sayfası'], ['futbol', 'Futbol Edit'], ['araba', 'Araba Edit']].map(([value, label]) => (
                 <button key={value} onClick={() => setCategory(value)} className={`rounded-md px-2.5 py-1.5 transition ${category === value ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{label}</button>
               ))}
             </div>

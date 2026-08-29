@@ -8,7 +8,7 @@ const { getPdfHeaderTitle, getPdfHeaderSubtitle } = require('../utils/settings')
 
 const router = express.Router();
 const STATUSES = new Set(['draft', 'sent', 'archived']);
-const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası' };
+const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası', futbol: 'Futbol Edit', araba: 'Araba Edit' };
 
 const FONT_PATH = path.join(__dirname, '../assets/fonts/Manrope.ttf');
 const PAGE_MARGIN = 48;

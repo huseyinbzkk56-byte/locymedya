@@ -5,7 +5,7 @@ import { InstagramIcon, TikTokIcon } from '../components/PlatformIcons';
 import logo from '../assets/logo-crop.png';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası' };
+const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası', futbol: 'Futbol Edit', araba: 'Araba Edit' };
 
 function formatFollowers(count) {
   if (count >= 1000000) return `${(count / 1000000).toFixed(count % 1000000 === 0 ? 0 : 1)}M`;
@@ -46,7 +46,7 @@ export default function PublicOffer() {
     return <div className="site-shell flex min-h-screen items-center justify-center"><p className="text-sm text-slate-400">Yükleniyor...</p></div>;
   }
 
-  const groups = ['rapmedia', 'dizi', 'influencer']
+  const groups = ['rapmedia', 'dizi', 'futbol', 'araba', 'influencer']
     .map((category) => ({ category, items: offer.items.filter((item) => item.category === category) }))
     .filter((group) => group.items.length);
 
