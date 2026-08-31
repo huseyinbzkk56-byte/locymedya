@@ -65,6 +65,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
 
 router.get('/owner-report', requireRole('admin'), async (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : new Date().toISOString().slice(0, 7);
+  // Projesi silinmiş (project_id NULL) videolar rapora ve ödeme tutarına dahil edilmez
   const rows = await db.prepare(`
     SELECT v.owner_user_id AS owner_id, COALESCE(u.display_name, u.username, 'Bilinmiyor') AS owner_name, u.role,
       COUNT(v.id) AS video_count,
@@ -74,11 +75,13 @@ router.get('/owner-report', requireRole('admin'), async (req, res) => {
     FROM videos v
     LEFT JOIN users u ON u.id = v.owner_user_id
     LEFT JOIN video_metrics latest ON latest.id = (SELECT id FROM video_metrics WHERE video_id = v.id ORDER BY scraped_at DESC, id DESC LIMIT 1)
-    WHERE strftime('%Y-%m', v.created_at) = ?
+    WHERE strftime('%Y-%m', v.created_at) = ? AND v.project_id IS NOT NULL
     GROUP BY v.owner_user_id
     ORDER BY total_views DESC
   `).all(month);
-  res.json({ month, owners: rows });
+  const rate = await getViewPaymentRate();
+  const owners = rows.map((row) => ({ ...row, estimated_payment: calculateEarningSync(row.total_views, rate) }));
+  res.json({ month, ratePerView: rate, owners });
 });
 
 module.exports = router;
