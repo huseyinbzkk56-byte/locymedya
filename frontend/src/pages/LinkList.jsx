@@ -4,13 +4,17 @@ import Layout from '../components/Layout';
 import { apiFetch } from '../api/client';
 import OfferAccounts from './OfferAccounts';
 import OfferList from './OfferList';
+import AccountReports from './AccountReports';
 import { PLATFORMS, detectPlatform, PlatformIcon } from '../utils/platform';
 
 const TABS = [
   ['catalog', 'Hesap Kataloğu'],
   ['offers', 'Teklifler'],
-  ['presentation', 'Sunum Linkleri']
+  ['presentation', 'Sunum Linkleri'],
+  ['reports', 'Hesap Raporları']
 ];
+
+const CATEGORY_LABEL = { influencer: 'Influencer', rapmedia: 'Türkçe Rap Medyası', dizi: 'Dizi Edit Sayfası', futbol: 'Futbol Edit', araba: 'Araba Edit' };
 
 const GROUPS = Object.entries(PLATFORMS).map(([key, cfg]) => ({ key, label: cfg.label, accent: cfg.badge }));
 const STATS_PLATFORMS = new Set(['instagram', 'tiktok']);
@@ -42,6 +46,8 @@ export default function LinkList() {
   const [platformTouched, setPlatformTouched] = useState(false);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [accounts, setAccounts] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -59,6 +65,7 @@ export default function LinkList() {
 
   useEffect(() => {
     loadLinks().catch((err) => setError(err.message));
+    apiFetch('/offer-accounts').then((data) => setAccounts(data.accounts)).catch(() => {});
     apiFetch('/presentations/brand-title').then((data) => {
       setBrandTitle(data.brandTitle || '');
       setHeaderTitle(data.headerTitle || '');
@@ -96,6 +103,7 @@ export default function LinkList() {
     setPlatformTouched(false);
     setUrl('');
     setTitle('');
+    setAccountId('');
     setEditingId(null);
   }
 
@@ -112,7 +120,7 @@ export default function LinkList() {
       const path = editingId ? `/links/${editingId}` : '/links';
       await apiFetch(path, {
         method: editingId ? 'PUT' : 'POST',
-        body: JSON.stringify({ platform, url, title })
+        body: JSON.stringify({ platform, url, title, accountId: accountId || null })
       });
       resetForm();
       await loadLinks();
@@ -184,6 +192,7 @@ export default function LinkList() {
     setPlatformTouched(true);
     setUrl(link.url);
     setTitle(link.title || '');
+    setAccountId(link.account_id || '');
     setError('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -256,6 +265,7 @@ export default function LinkList() {
 
         {activeTab === 'catalog' && <OfferAccounts />}
         {activeTab === 'offers' && <OfferList />}
+        {activeTab === 'reports' && <AccountReports />}
 
         {activeTab === 'presentation' && (
         <>
@@ -305,6 +315,12 @@ export default function LinkList() {
           </div>
           <div className="mt-3 flex flex-col sm:flex-row gap-3">
             <input value={title} onChange={(event) => setTitle(event.target.value)} type="text" placeholder="Başlık (ör. Ünlü Sanatçı - Yeni Klip)" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition-shadow focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10" />
+            <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm sm:w-64">
+              <option value="">Hesap seç (opsiyonel)</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} — {CATEGORY_LABEL[account.category] || account.category}</option>)}
+            </select>
+          </div>
+          <div className="mt-3 flex flex-col sm:flex-row gap-3">
             <button disabled={saving} className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition">{saving ? 'Kaydediliyor...' : editingId ? 'Güncelle' : '+ Link Ekle'}</button>
             {editingId && <button type="button" onClick={resetForm} className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm hover:bg-gray-100">Vazgeç</button>}
           </div>
@@ -355,6 +371,7 @@ export default function LinkList() {
                     </div>
                     <div className="p-4">
                       <p className="break-words text-base font-semibold text-gray-900" style={{ overflowWrap: 'anywhere' }}>{link.title || link.preview_title || `${group.label} Paylaşımı`}</p>
+                      {link.account_name && <p className="mt-0.5 text-xs text-gray-400">{link.account_name}</p>}
                       {link.stats_fetched_at && (
                         <div className="mt-3 flex gap-5">
                           {formatStatNumber(link.stats_views) !== null && (

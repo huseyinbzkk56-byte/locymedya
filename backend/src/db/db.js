@@ -123,6 +123,7 @@ async function runInit() {
   await addColumnIfMissing('links', 'stats_fetched_at', 'TEXT');
   await addColumnIfMissing('links', 'screenshot_url', 'TEXT');
   await addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing('links', 'account_id', 'INTEGER REFERENCES offer_accounts(id)');
 
   // links.platform CHECK kısıtlaması eski (instagram/tiktok/x) ise genişlet — yeni platformlar (youtube/spotify/facebook/web) eklenebilsin
   const linksSql = await tableSql('links');
@@ -148,6 +149,7 @@ async function runInit() {
     await addColumnIfMissing('links', 'stats_fetched_at', 'TEXT');
     await addColumnIfMissing('links', 'screenshot_url', 'TEXT');
     await addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+    await addColumnIfMissing('links', 'account_id', 'INTEGER REFERENCES offer_accounts(id)');
   }
 
   const paymentColumns = await columnsOf('payments');
