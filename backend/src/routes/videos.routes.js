@@ -54,6 +54,15 @@ router.post('/:id/refresh', requireRole('admin', 'influencer', 'rapmedia'), asyn
   } catch (error) { next(error); }
 });
 
+router.delete('/:id', requireRole('admin'), async (req, res) => {
+  const result = await db.transaction(async (tx) => {
+    await tx.prepare('DELETE FROM video_metrics WHERE video_id = ?').run(req.params.id);
+    return tx.prepare('DELETE FROM videos WHERE id = ?').run(req.params.id);
+  });
+  if (!result.changes) return res.status(404).json({ error: 'Video bulunamadı' });
+  res.status(204).end();
+});
+
 router.get('/owner-report', requireRole('admin'), async (req, res) => {
   const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : new Date().toISOString().slice(0, 7);
   const rows = await db.prepare(`
