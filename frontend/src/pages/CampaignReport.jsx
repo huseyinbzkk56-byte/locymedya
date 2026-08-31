@@ -159,14 +159,19 @@ function GrowthBars({ growth }) {
   );
 }
 
-function PlatformChip({ platform }) {
+function PlatformChip({ platform, href }) {
   const config = PLATFORMS[platform] || PLATFORMS.web;
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-slate-200">
+  const className = 'inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition' + (href ? ' hover:border-white/30 hover:text-white' : '');
+  const content = (
+    <>
       <PlatformIcon platform={platform} className="h-3 w-3" style={{ color: config.accent }} />
       {config.label}
-    </span>
+    </>
   );
+  if (href) {
+    return <a href={href} target="_blank" rel="noreferrer" className={className}>{content}</a>;
+  }
+  return <span className={className}>{content}</span>;
 }
 
 export default function CampaignReport() {
@@ -289,7 +294,7 @@ export default function CampaignReport() {
                     <Avatar name={topVideo.owner_name} size={44} />
                     <div>
                       <div className="font-medium text-white">@{topVideo.owner_name}</div>
-                      <PlatformChip platform={topVideo.platform} />
+                      <PlatformChip platform={topVideo.platform} href={topVideo.url} />
                     </div>
                   </div>
                   <div className="flex flex-1 flex-wrap gap-6 sm:justify-end">
@@ -383,7 +388,7 @@ export default function CampaignReport() {
                 {videos.map((v) => (
                   <tr key={v.id} className="border-b border-white/5 last:border-0">
                     <td className="px-4 py-3 font-medium text-white">@{v.owner_name}</td>
-                    <td className="px-4 py-3"><PlatformChip platform={v.platform} /></td>
+                    <td className="px-4 py-3"><PlatformChip platform={v.platform} href={v.url} /></td>
                     <td className="px-4 py-3 text-right font-medium text-white">{formatCompact(v.views)}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{formatCompact(v.likes)}</td>
                     <td className="px-4 py-3 text-right text-slate-300">{formatCompact(v.comments)}</td>
