@@ -6,11 +6,15 @@ const ACTOR_ENV = {
   x: 'APIFY_X_ACTOR_ID'
 };
 
+// Instagram/TikTok -1 döndürür when a creator hides that count — gerçek bir değer değil, "bilinmiyor" demek
 function numberValue(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
-  if (typeof value !== 'string') return null;
-  const parsed = Number(value.replace(/[^0-9]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
+  let result = null;
+  if (typeof value === 'number' && Number.isFinite(value)) result = Math.round(value);
+  else if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[^0-9]/g, ''));
+    result = Number.isFinite(parsed) ? parsed : null;
+  }
+  return result !== null && result < 0 ? null : result;
 }
 
 function extractMetrics(item) {
