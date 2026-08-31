@@ -54,4 +54,22 @@ router.post('/:id/refresh', requireRole('admin', 'influencer', 'rapmedia'), asyn
   } catch (error) { next(error); }
 });
 
+router.get('/owner-report', requireRole('admin'), async (req, res) => {
+  const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : new Date().toISOString().slice(0, 7);
+  const rows = await db.prepare(`
+    SELECT v.owner_user_id AS owner_id, COALESCE(u.display_name, u.username, 'Bilinmiyor') AS owner_name, u.role,
+      COUNT(v.id) AS video_count,
+      COALESCE(SUM(latest.views), 0) AS total_views,
+      COALESCE(SUM(latest.likes), 0) AS total_likes,
+      COALESCE(SUM(latest.comments), 0) AS total_comments
+    FROM videos v
+    LEFT JOIN users u ON u.id = v.owner_user_id
+    LEFT JOIN video_metrics latest ON latest.id = (SELECT id FROM video_metrics WHERE video_id = v.id ORDER BY scraped_at DESC, id DESC LIMIT 1)
+    WHERE strftime('%Y-%m', v.created_at) = ?
+    GROUP BY v.owner_user_id
+    ORDER BY total_views DESC
+  `).all(month);
+  res.json({ month, owners: rows });
+});
+
 module.exports = router;

@@ -20,7 +20,7 @@ export default function Layout({ title, children }) {
       ['Dashboard', '/admin'], ['Projeler', '/admin/projects'], ['Rap Medyaları', '/admin/rap-media'],
       ['Influencerlar', '/admin/influencers'], ['Kullanıcılar', '/admin/users'],
       ...(isCompanyAdmin ? [] : [['Şarkılar', '/admin/songs']]),
-      ['Videolar', '/admin/videos'], ['Raporlar', '/admin/reports'],
+      ['Videolar', '/admin/videos'], ['Video Raporları', '/admin/video-reports'], ['Raporlar', '/admin/reports'],
       ...(isCompanyAdmin ? [] : [['Ödemeler', '/admin/payments'], ['Ödeme Kuralları', '/admin/payment-rules']]),
       ['Link Listesi', '/admin/links'],
       ...(isCompanyAdmin ? [] : [['İletişim Mesajları', '/admin/contact-messages']]),
