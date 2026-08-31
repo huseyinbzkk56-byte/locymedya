@@ -20,6 +20,16 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: APIFY_API_TOKEN
+        sync: false
+      - key: APIFY_INSTAGRAM_ACTOR_ID
+        sync: false
+      - key: APIFY_TIKTOK_ACTOR_ID
+        sync: false
+      - key: APIFY_INSTAGRAM_ACTOR_INPUT
+        sync: false
+      - key: APIFY_TIKTOK_ACTOR_INPUT
+        sync: false
 
   - type: web
     name: locymedya-frontend
