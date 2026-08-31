@@ -259,6 +259,13 @@ async function runInit() {
 
   await addColumnIfMissing('offer_lists', 'total_price', 'REAL');
 
+  // Video Raporları ve izlenme sorguları için performans indexleri
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_video_metrics_video_scraped ON video_metrics(video_id, scraped_at);
+    CREATE INDEX IF NOT EXISTS idx_videos_owner_user_id ON videos(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_videos_project_id ON videos(project_id);
+  `);
+
   // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır
   await db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('view_payment_rate', '0.0015')").run();
 }

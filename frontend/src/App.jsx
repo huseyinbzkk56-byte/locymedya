@@ -15,6 +15,7 @@ import Reports from './pages/Reports';
 import Songs from './pages/Songs';
 import Videos from './pages/Videos';
 import VideoReports from './pages/VideoReports';
+import VideoReportDetail from './pages/VideoReportDetail';
 import RoleProjects from './pages/RoleProjects';
 import Profile from './pages/Profile';
 import MyVideos from './pages/MyVideos';
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="/admin/songs" element={<ProtectedRoute role="admin" fullAdminOnly><Songs /></ProtectedRoute>} />
         <Route path="/admin/videos" element={<ProtectedRoute role="admin"><Videos /></ProtectedRoute>} />
         <Route path="/admin/video-reports" element={<ProtectedRoute role="admin"><VideoReports /></ProtectedRoute>} />
+        <Route path="/admin/video-reports/:ownerId" element={<ProtectedRoute role="admin"><VideoReportDetail /></ProtectedRoute>} />
         <Route path="/admin/profile" element={<ProtectedRoute role="admin"><Profile /></ProtectedRoute>} />
         <Route path="/admin/contact-messages" element={<ProtectedRoute role="admin" fullAdminOnly><AdminContactMessages /></ProtectedRoute>} />
         <Route path="/admin/offers/:id" element={<ProtectedRoute role="admin" fullAdminOnly><OfferDetail /></ProtectedRoute>} />

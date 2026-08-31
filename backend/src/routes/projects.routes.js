@@ -92,9 +92,11 @@ router.put('/:id', requireRole('admin'), requireFullAdmin, async (req, res) => {
 });
 
 router.delete('/:id', requireRole('admin'), requireFullAdmin, async (req, res) => {
-  // Videolar silinmez, projeden ayrılır (izlenme geçmişi kaybolmasın) — ödemeler projeyle birlikte silinir
+  // Proje silinince ona bağlı videolar/izlenme geçmişi/ödemeler de tamamen silinir — eski izlenme
+  // yeni bir projeye asla taşınmaz (aynı URL yeni projeye eklenirse sıfırdan yeni video kaydı olur)
   const result = await db.transaction(async (tx) => {
-    await tx.prepare('UPDATE videos SET project_id = NULL WHERE project_id = ?').run(req.params.id);
+    await tx.prepare('DELETE FROM video_metrics WHERE video_id IN (SELECT id FROM videos WHERE project_id = ?)').run(req.params.id);
+    await tx.prepare('DELETE FROM videos WHERE project_id = ?').run(req.params.id);
     await tx.prepare('DELETE FROM payments WHERE project_id = ?').run(req.params.id);
     await tx.prepare('DELETE FROM project_influencers WHERE project_id = ?').run(req.params.id);
     await tx.prepare('DELETE FROM project_media_accounts WHERE project_id = ?').run(req.params.id);

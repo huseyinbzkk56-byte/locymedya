@@ -5,7 +5,7 @@ const { calculateEarning, getViewPaymentRate } = require('../utils/settings');
 
 const router = express.Router();
 
-// En güncel metrik snapshot'ını, silinmiş videoları hariç tutarak toplayan yardımcı sorgu
+// En güncel metrik snapshot'ını, silinmiş videoları/silinmiş projeye bağlı videoları hariç tutarak toplayan yardımcı sorgu
 const LATEST_ACTIVE_VIEWS_SQL = `
   SELECT COALESCE(SUM(vm.views), 0) AS total
   FROM video_metrics vm
@@ -15,7 +15,7 @@ const LATEST_ACTIVE_VIEWS_SQL = `
     GROUP BY video_id
   ) last ON last.video_id = vm.video_id AND last.latest = vm.scraped_at
   JOIN videos v ON v.id = vm.video_id
-  WHERE v.status = 'active'
+  WHERE v.status = 'active' AND v.project_id IS NOT NULL
 `;
 
 router.get('/admin', authenticate, requireRole('admin'), async (req, res) => {
@@ -59,7 +59,7 @@ router.get('/influencer', authenticate, requireRole('influencer'), async (req, r
        JOIN (SELECT video_id, MAX(scraped_at) AS latest FROM video_metrics GROUP BY video_id) last
          ON last.video_id = vm.video_id AND last.latest = vm.scraped_at
        JOIN videos v ON v.id = vm.video_id
-       WHERE v.status = 'active' AND v.owner_user_id = ?`
+       WHERE v.status = 'active' AND v.project_id IS NOT NULL AND v.owner_user_id = ?`
     )
     .get(req.user.id)).total;
 
