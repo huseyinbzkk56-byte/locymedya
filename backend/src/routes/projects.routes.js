@@ -92,7 +92,14 @@ router.put('/:id', requireRole('admin'), requireFullAdmin, async (req, res) => {
 });
 
 router.delete('/:id', requireRole('admin'), requireFullAdmin, async (req, res) => {
-  const result = await db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
+  // Video ve ödeme kayıtları asla silinmez — sadece projeden ayrılır (geçmiş veri/kazanç kaybolmasın)
+  const result = await db.transaction(async (tx) => {
+    await tx.prepare('UPDATE videos SET project_id = NULL WHERE project_id = ?').run(req.params.id);
+    await tx.prepare('UPDATE payments SET project_id = NULL WHERE project_id = ?').run(req.params.id);
+    await tx.prepare('DELETE FROM project_influencers WHERE project_id = ?').run(req.params.id);
+    await tx.prepare('DELETE FROM project_media_accounts WHERE project_id = ?').run(req.params.id);
+    return tx.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
+  });
   if (!result.changes) return res.status(404).json({ error: 'Proje bulunamadı' });
   res.status(204).end();
 });
