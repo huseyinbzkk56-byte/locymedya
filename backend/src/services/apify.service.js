@@ -92,7 +92,9 @@ async function refreshVideo(video) {
 
 async function refreshActiveVideos() {
   if (!process.env.APIFY_API_TOKEN) return { skipped: true, reason: 'APIFY_API_TOKEN tanımlı değil' };
-  const videos = await db.prepare("SELECT * FROM videos WHERE status = 'active'").all();
+  // 'unreachable' da tekrar denenir — Apify'da geçici bir hata (limit/timeout) yüzünden bu duruma
+  // düşen bir video, admin elle "güncelle"ye basmadan bir sonraki saatlik taramada kendi kendine düzelsin
+  const videos = await db.prepare("SELECT * FROM videos WHERE status IN ('active', 'unreachable')").all();
   const results = [];
   for (const video of videos) results.push(await refreshVideo(video));
   return { skipped: false, count: results.length, results };
