@@ -41,6 +41,17 @@ function previewImageOf(item) {
     || null;
 }
 
+// Apify hesabı aynı anda sınırlı sayıda actor çalıştırabiliyor (ücretsiz/başlangıç planında düşük).
+// Admin birden fazla "Apify ile güncelle"ye art arda basınca hepsi aynı anda Apify'a gidip
+// birbirini kilitliyor ve bazıları yarım kalıp "Erişilemiyor" olarak yanlış işaretleniyordu.
+// Bu kilit tüm Apify çağrılarını backend tarafında teker teker sıraya sokar.
+let apifyQueue = Promise.resolve();
+function runApifySerialized(fn) {
+  const result = apifyQueue.then(fn, fn);
+  apifyQueue = result.then(() => {}, () => {});
+  return result;
+}
+
 function inputFor(video) {
   const input = process.env[`APIFY_${video.platform.toUpperCase()}_ACTOR_INPUT`];
   if (!input) return { videoURL: video.url, url: video.url, urls: [video.url] };
@@ -51,7 +62,7 @@ function inputFor(video) {
   }
 }
 
-async function fetchPublicMetrics(video) {
+async function fetchPublicMetricsOnce(video) {
   const token = process.env.APIFY_API_TOKEN;
   const actorId = process.env[ACTOR_ENV[video.platform]];
   if (!token || !actorId) throw new Error('Apify token ve platform actor ID yapılandırılmamış');
@@ -63,6 +74,12 @@ async function fetchPublicMetrics(video) {
   });
   if (!runResponse.ok) throw new Error(`Apify actor çalıştırılamadı (${runResponse.status})`);
   const run = await runResponse.json();
+  // waitForFinish süresinde bitmediyse (ör. Apify hesabındaki eşzamanlı çalıştırma limiti doluysa
+  // run sıraya girip zamanında tamamlanmamış olabilir) — bunu içerik silinmiş gibi göstermeyelim
+  const runStatus = run.data?.status;
+  if (runStatus && !['SUCCEEDED', 'FINISHED'].includes(runStatus)) {
+    throw new Error(`Apify çalıştırması zamanında bitmedi (${runStatus}) — birazdan tekrar deneyin`);
+  }
   const datasetId = run.data?.defaultDatasetId;
   if (!datasetId) throw new Error('Apify actor dataset döndürmedi');
 
@@ -76,6 +93,10 @@ async function fetchPublicMetrics(video) {
   metrics.image = previewImageOf(item);
   metrics.title = item.fullText || item.text || item.caption || null;
   return metrics;
+}
+
+function fetchPublicMetrics(video) {
+  return runApifySerialized(() => fetchPublicMetricsOnce(video));
 }
 
 async function refreshVideo(video) {
