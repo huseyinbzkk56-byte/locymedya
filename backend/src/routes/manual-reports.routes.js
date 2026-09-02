@@ -292,7 +292,7 @@ async function drawManualReportPdf(res, report, summary, videos, images, brandTi
     const loadedImages = await preloadReportImages(doc, images);
     if (loadedImages.length) {
       if (doc.y + 40 > contentBottom()) { doc.addPage(); paintBg(); doc.y = PAGE_MARGIN; }
-      doc.font('Manrope').fontSize(14).fillColor(COLOR.textPrimary).text('Ekran Görüntüleri', PAGE_MARGIN, doc.y);
+      doc.font('Manrope').fontSize(14).fillColor(COLOR.textPrimary).text('Ses Performansları', PAGE_MARGIN, doc.y);
       doc.y += 14;
       const gap = 12;
       const colW = (pageWidth() - gap) / 2;

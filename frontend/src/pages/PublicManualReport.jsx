@@ -124,7 +124,7 @@ export default function PublicManualReport() {
 
             {images?.length > 0 && (
               <div>
-                <p className="offer-platform-label">Ekran Görüntüleri</p>
+                <p className="offer-platform-label">Ses Performansları</p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {images.map((img, index) => (
                     <div key={img.id} className="offer-card card-reveal overflow-hidden !p-0" style={{ '--reveal-delay': `${Math.min(index * 70, 420)}ms` }}>

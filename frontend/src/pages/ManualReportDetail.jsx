@@ -347,7 +347,7 @@ export default function ManualReportDetail() {
 
         <section className="mt-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Ekran Görüntüleri (SS)</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Ses Performansları (SS)</h2>
             <label className="cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50 transition">
               {uploadingImage ? 'Yükleniyor...' : '+ Görsel Ekle'}
               <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadImage} disabled={uploadingImage} className="hidden" />
