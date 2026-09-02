@@ -357,7 +357,9 @@ export default function ManualReportDetail() {
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {images.map((img) => (
                 <div key={img.id} className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                  <img src={img.image_url} alt="" className="aspect-video w-full object-cover" />
+                  <a href={img.image_url} target="_blank" rel="noreferrer" className="block">
+                    <img src={img.image_url} alt="" className="aspect-video w-full object-cover transition group-hover:scale-105" />
+                  </a>
                   <button onClick={() => removeImage(img.id)} className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100 hover:bg-black/80">Sil</button>
                 </div>
               ))}
