@@ -27,6 +27,9 @@ import AdminMembers from './pages/AdminMembers';
 import AdminContactMessages from './pages/AdminContactMessages';
 import OfferDetail from './pages/OfferDetail';
 import PublicOffer from './pages/PublicOffer';
+import ManualReports from './pages/ManualReports';
+import ManualReportDetail from './pages/ManualReportDetail';
+import PublicManualReport from './pages/PublicManualReport';
 import NotFound from './pages/NotFound';
 
 function useHashScroll(location) {
@@ -53,6 +56,7 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/iletisim" element={<Contact />} />
         <Route path="/teklif/:token" element={<PublicOffer />} />
+        <Route path="/rapor/:token" element={<PublicManualReport />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
@@ -94,6 +98,8 @@ function AppRoutes() {
         <Route path="/admin/profile" element={<ProtectedRoute role="admin"><Profile /></ProtectedRoute>} />
         <Route path="/admin/contact-messages" element={<ProtectedRoute role="admin" fullAdminOnly><AdminContactMessages /></ProtectedRoute>} />
         <Route path="/admin/offers/:id" element={<ProtectedRoute role="admin" fullAdminOnly><OfferDetail /></ProtectedRoute>} />
+        <Route path="/admin/manual-reports" element={<ProtectedRoute role="admin"><ManualReports /></ProtectedRoute>} />
+        <Route path="/admin/manual-reports/:id" element={<ProtectedRoute role="admin"><ManualReportDetail /></ProtectedRoute>} />
         <Route
           path="/influencer"
           element={

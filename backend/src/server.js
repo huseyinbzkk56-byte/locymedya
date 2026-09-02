@@ -26,6 +26,8 @@ const contactRoutes = require('./routes/contact.routes');
 const offerAccountsRoutes = require('./routes/offer-accounts.routes');
 const offersRoutes = require('./routes/offers.routes');
 const campaignReportRoutes = require('./routes/campaign-report.routes');
+const manualReportsRoutes = require('./routes/manual-reports.routes');
+const { refreshAllManualReportVideos } = require('./routes/manual-reports.routes');
 const path = require('path');
 
 if (!process.env.JWT_SECRET) {
@@ -58,12 +60,15 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/offer-accounts', offerAccountsRoutes);
 app.use('/api/offers', offersRoutes);
 app.use('/api/campaign-reports', campaignReportRoutes);
+app.use('/api/manual-reports', manualReportsRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 cron.schedule('0 * * * *', async () => {
   const result = await refreshActiveVideos();
   if (!result.skipped) console.log(`Apify metrik kontrolü tamamlandı: ${result.count} video`);
+  const manualResult = await refreshAllManualReportVideos();
+  if (!manualResult.skipped) console.log(`Manuel rapor metrik kontrolü tamamlandı: ${manualResult.count} video`);
 });
 
 // Genel hata yakalayıcı

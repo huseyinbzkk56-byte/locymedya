@@ -196,3 +196,42 @@ CREATE TABLE IF NOT EXISTS links (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Manuel Raporlar: mevcut proje/video sisteminden tamamen bağımsız, eski/kapanmış PR
+-- projelerini geriye dönük raporlamak için. projects/videos tablolarına hiç dokunmaz.
+CREATE TABLE IF NOT EXISTS manual_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  artist_name TEXT,
+  song_name TEXT,
+  report_date TEXT,
+  note TEXT,
+  public_token TEXT UNIQUE NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS manual_report_videos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL REFERENCES manual_reports(id),
+  page_name TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK(platform IN ('instagram','tiktok')),
+  url TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','success','error')),
+  error_message TEXT,
+  title TEXT,
+  thumbnail_url TEXT,
+  posted_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Her kontrolde yeni satır eklenir (geçmiş korunur, mevcut video_metrics ile aynı mantık)
+CREATE TABLE IF NOT EXISTS manual_report_video_metrics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  video_id INTEGER NOT NULL REFERENCES manual_report_videos(id),
+  views INTEGER,
+  likes INTEGER,
+  comments INTEGER,
+  shares INTEGER,
+  scraped_at TEXT DEFAULT (datetime('now'))
+);
+

@@ -2,7 +2,7 @@ import { InstagramIcon, TikTokIcon, XIcon, YouTubeIcon, SpotifyIcon, FacebookIco
 
 export const PLATFORMS = {
   instagram: { label: 'Instagram', hosts: ['instagram.com', 'www.instagram.com'], badge: 'bg-pink-50 text-pink-700', icon: InstagramIcon, accent: '#E1306C' },
-  tiktok: { label: 'TikTok', hosts: ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com'], badge: 'bg-slate-100 text-slate-800', icon: TikTokIcon, accent: '#25F4EE' },
+  tiktok: { label: 'TikTok', hosts: ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com', 'm.tiktok.com'], badge: 'bg-slate-100 text-slate-800', icon: TikTokIcon, accent: '#25F4EE' },
   x: { label: 'X', hosts: ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'], badge: 'bg-slate-100 text-slate-800', icon: XIcon, accent: '#1D9BF0' },
   youtube: { label: 'YouTube', hosts: ['youtube.com', 'www.youtube.com', 'youtu.be', 'm.youtube.com'], badge: 'bg-red-50 text-red-700', icon: YouTubeIcon, accent: '#FF3B4E' },
   spotify: { label: 'Spotify', hosts: ['open.spotify.com'], badge: 'bg-green-50 text-green-700', icon: SpotifyIcon, accent: '#1DB954' },

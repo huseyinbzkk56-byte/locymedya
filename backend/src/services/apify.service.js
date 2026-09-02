@@ -28,7 +28,12 @@ function extractMetrics(item) {
     comments: numberValue(item.comments ?? item.commentCount ?? item.commentsCount ?? item.replyCount ?? item.statistics?.commentCount),
     shares: numberValue(item.shares ?? item.shareCount ?? item.retweetCount ?? item.statistics?.shareCount),
     // Apify bazı actor'larda içerik yoksa error: "not_found" gibi bir string döndürür (boolean true değil) — her ikisini de yakala
-    unavailable: item.isDeleted === true || item.status === 'deleted' || Boolean(item.error)
+    unavailable: item.isDeleted === true || item.status === 'deleted' || Boolean(item.error),
+    errorDescription: item.errorDescription || null,
+    postedAt: item.timestamp || item.createTimeISO || null,
+    authorUsername: item.ownerUsername || item.authorMeta?.name || item.authorMeta?.uniqueId || null,
+    authorName: item.ownerFullName || item.authorMeta?.nickName || null,
+    authorAvatar: item.authorMeta?.avatar || null
   };
 }
 

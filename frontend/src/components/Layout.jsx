@@ -22,7 +22,7 @@ export default function Layout({ title, children }) {
       ...(isCompanyAdmin ? [] : [['Şarkılar', '/admin/songs']]),
       ['Videolar', '/admin/videos'], ['Video Raporları', '/admin/video-reports'], ['Raporlar', '/admin/reports'],
       ...(isCompanyAdmin ? [] : [['Ödemeler', '/admin/payments'], ['Ödeme Kuralları', '/admin/payment-rules']]),
-      ['Link Listesi', '/admin/links'],
+      ['Link Listesi', '/admin/links'], ['Manuel Raporlar', '/admin/manual-reports'],
       ...(isCompanyAdmin ? [] : [['İletişim Mesajları', '/admin/contact-messages']]),
       ['Ayarlar', '/admin/profile']
     ],
