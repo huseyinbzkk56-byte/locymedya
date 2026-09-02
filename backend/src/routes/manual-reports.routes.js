@@ -1,15 +1,29 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const multer = require('multer');
 const PDFDocument = require('pdfkit');
 const db = require('../db/db');
 const { authenticate, requireRole, requireFullAdmin } = require('../middleware/auth');
 const { getPdfHeaderTitle, getPdfHeaderSubtitle } = require('../utils/settings');
 const { fetchPublicMetrics } = require('../services/apify.service');
 const { detectPlatform, PLATFORMS } = require('../utils/platform');
+const { uploadBuffer, destroyByUrl } = require('../services/storage.service');
 
 const router = express.Router();
 const VIDEO_PLATFORMS = new Set(['instagram', 'tiktok']);
+const IMAGE_FETCH_TIMEOUT = 6000;
+const IMAGE_FOLDER = 'locymedya/manual-reports';
+const imageAllowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const imageAllowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    const allowed = imageAllowedTypes.has(file.mimetype) && imageAllowedExtensions.has(path.extname(file.originalname).toLowerCase());
+    callback(allowed ? null : new Error('Görsel JPG, JPEG, PNG veya WEBP olmalı'), allowed);
+  }
+});
 
 const FONT_PATH = path.join(__dirname, '../assets/fonts/Manrope.ttf');
 const PAGE_MARGIN = 48;
@@ -129,6 +143,42 @@ async function reportTotals(reportId) {
   };
 }
 
+function getReportImages(reportId) {
+  return db.prepare('SELECT id, report_id, image_url, created_at FROM manual_report_images WHERE report_id = ? ORDER BY created_at ASC, id ASC').all(reportId);
+}
+
+async function fetchRemoteImageBuffer(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT);
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LocyMedyaBot/1.0)' } });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!/jpeg|jpg|png|webp/i.test(contentType)) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Ekran görüntülerini PDF'e gömmeden önce indirir ve boyutlarını okur — biri başarısız olursa diğerlerini etkilemez
+async function preloadReportImages(doc, images) {
+  const slots = await Promise.all(images.map(async (img) => {
+    const buffer = await fetchRemoteImageBuffer(img.image_url);
+    if (!buffer) return null;
+    try {
+      const info = doc.openImage(buffer);
+      return { buffer, width: info.width, height: info.height };
+    } catch {
+      return null;
+    }
+  }));
+  return slots.filter(Boolean);
+}
+
 // ---- Public: müşteriye gönderilen rapor görünümü (kimlik doğrulama gerektirmez) ----
 router.get('/public/:token', async (req, res) => {
   const report = await db.prepare('SELECT id, name, artist_name, song_name, report_date, note FROM manual_reports WHERE public_token = ?').get(req.params.token);
@@ -144,12 +194,13 @@ router.get('/public/:token', async (req, res) => {
     WHERE v.report_id = ? AND v.status = 'success'
     ORDER BY latest.views DESC
   `).all(report.id));
+  const images = await getReportImages(report.id);
   const brandTitle = await getPdfHeaderTitle();
   const brandSubtitle = await getPdfHeaderSubtitle();
-  res.json({ report, summary, videos, brand: { title: brandTitle, subtitle: brandSubtitle } });
+  res.json({ report, summary, videos, images, brand: { title: brandTitle, subtitle: brandSubtitle } });
 });
 
-function drawManualReportPdf(res, report, summary, videos, brandTitle, brandSubtitle) {
+async function drawManualReportPdf(res, report, summary, videos, images, brandTitle, brandSubtitle) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="rapor-${report.id}.pdf"`);
   const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN, bufferPages: true, info: { Title: `${brandTitle} - ${report.name}`, Author: brandTitle } });
@@ -236,6 +287,33 @@ function drawManualReportPdf(res, report, summary, videos, brandTitle, brandSubt
     doc.y = y + 24;
   });
 
+  // Ekran görüntüleri (SS) — 2 sütunlu ızgara, en-boy oranı korunur
+  if (images.length) {
+    const loadedImages = await preloadReportImages(doc, images);
+    if (loadedImages.length) {
+      if (doc.y + 40 > contentBottom()) { doc.addPage(); paintBg(); doc.y = PAGE_MARGIN; }
+      doc.font('Manrope').fontSize(14).fillColor(COLOR.textPrimary).text('Ekran Görüntüleri', PAGE_MARGIN, doc.y);
+      doc.y += 14;
+      const gap = 12;
+      const colW = (pageWidth() - gap) / 2;
+      const maxImgH = 220;
+      for (let i = 0; i < loadedImages.length; i += 2) {
+        const pair = [loadedImages[i], loadedImages[i + 1]].filter(Boolean);
+        const sized = pair.map((img) => {
+          const scale = Math.min(colW / img.width, maxImgH / img.height, 1);
+          return { ...img, w: img.width * scale, h: img.height * scale };
+        });
+        const rowH = Math.max(...sized.map((img) => img.h));
+        if (doc.y + rowH > contentBottom()) { doc.addPage(); paintBg(); doc.y = PAGE_MARGIN; }
+        sized.forEach((img, idx) => {
+          const x = PAGE_MARGIN + idx * (colW + gap);
+          doc.image(img.buffer, x, doc.y, { width: img.w, height: img.h });
+        });
+        doc.y += rowH + gap;
+      }
+    }
+  }
+
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(range.start + i);
@@ -260,9 +338,10 @@ router.get('/public/:token/pdf', async (req, res) => {
     WHERE v.report_id = ? AND v.status = 'success'
     ORDER BY latest.views DESC
   `).all(report.id);
+  const images = await getReportImages(report.id);
   const brandTitle = await getPdfHeaderTitle();
   const brandSubtitle = await getPdfHeaderSubtitle();
-  drawManualReportPdf(res, report, summary, videos, brandTitle, brandSubtitle);
+  await drawManualReportPdf(res, report, summary, videos, images, brandTitle, brandSubtitle);
 });
 
 // ---- Bundan sonrası sadece admin ----
@@ -301,7 +380,8 @@ router.get('/:id', async (req, res) => {
     WHERE v.report_id = ?
     ORDER BY v.created_at DESC, v.id DESC
   `).all(report.id);
-  res.json({ report, summary, videos });
+  const images = await getReportImages(report.id);
+  res.json({ report, summary, videos, images });
 });
 
 router.put('/:id', async (req, res) => {
@@ -314,12 +394,32 @@ router.put('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
+  const images = await getReportImages(req.params.id);
   const result = await db.transaction(async (tx) => {
     await tx.prepare('DELETE FROM manual_report_video_metrics WHERE video_id IN (SELECT id FROM manual_report_videos WHERE report_id = ?)').run(req.params.id);
     await tx.prepare('DELETE FROM manual_report_videos WHERE report_id = ?').run(req.params.id);
+    await tx.prepare('DELETE FROM manual_report_images WHERE report_id = ?').run(req.params.id);
     return tx.prepare('DELETE FROM manual_reports WHERE id = ?').run(req.params.id);
   });
   if (!result.changes) return res.status(404).json({ error: 'Rapor bulunamadı' });
+  Promise.all(images.map((img) => destroyByUrl(img.image_url, IMAGE_FOLDER, 'image'))).catch(() => {});
+  res.status(204).end();
+});
+
+router.post('/:id/images', uploadImage.single('image'), async (req, res) => {
+  const report = await db.prepare('SELECT id FROM manual_reports WHERE id = ?').get(req.params.id);
+  if (!report) return res.status(404).json({ error: 'Rapor bulunamadı' });
+  if (!req.file) return res.status(400).json({ error: 'Görsel zorunlu' });
+  const result = await uploadBuffer(req.file.buffer, { folder: IMAGE_FOLDER, resourceType: 'image' });
+  const insert = await db.prepare('INSERT INTO manual_report_images (report_id, image_url) VALUES (?, ?)').run(report.id, result.secure_url);
+  res.status(201).json({ image: await db.prepare('SELECT * FROM manual_report_images WHERE id = ?').get(insert.lastInsertRowid) });
+});
+
+router.delete('/:id/images/:imageId', async (req, res) => {
+  const image = await db.prepare('SELECT * FROM manual_report_images WHERE id = ? AND report_id = ?').get(req.params.imageId, req.params.id);
+  if (!image) return res.status(404).json({ error: 'Görsel bulunamadı' });
+  await db.prepare('DELETE FROM manual_report_images WHERE id = ?').run(req.params.imageId);
+  destroyByUrl(image.image_url, IMAGE_FOLDER, 'image').catch(() => {});
   res.status(204).end();
 });
 
@@ -390,9 +490,10 @@ router.get('/:id/pdf', async (req, res) => {
     WHERE v.report_id = ? AND v.status = 'success'
     ORDER BY latest.views DESC
   `).all(report.id);
+  const images = await getReportImages(report.id);
   const brandTitle = await getPdfHeaderTitle();
   const brandSubtitle = await getPdfHeaderSubtitle();
-  drawManualReportPdf(res, report, summary, videos, brandTitle, brandSubtitle);
+  await drawManualReportPdf(res, report, summary, videos, images, brandTitle, brandSubtitle);
 });
 
 module.exports = router;

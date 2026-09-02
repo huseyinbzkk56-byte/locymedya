@@ -43,7 +43,7 @@ export default function PublicManualReport() {
   }
   if (!data) return <div className="site-shell flex min-h-screen items-center justify-center"><p className="text-sm text-slate-400">Yükleniyor...</p></div>;
 
-  const { report, summary, videos, brand } = data;
+  const { report, summary, videos, images = [], brand } = data;
 
   return (
     <div className="site-shell min-h-screen text-gray-950">
@@ -121,6 +121,19 @@ export default function PublicManualReport() {
                 </table>
               </div>
             </div>
+
+            {images?.length > 0 && (
+              <div>
+                <p className="offer-platform-label">Ekran Görüntüleri</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {images.map((img, index) => (
+                    <div key={img.id} className="offer-card card-reveal overflow-hidden !p-0" style={{ '--reveal-delay': `${Math.min(index * 70, 420)}ms` }}>
+                      <img src={img.image_url} alt="" className="aspect-video w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {report.note && (
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 text-sm text-gray-600">{report.note}</div>

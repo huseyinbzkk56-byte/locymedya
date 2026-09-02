@@ -45,6 +45,9 @@ export default function ManualReportDetail() {
   const [refreshingId, setRefreshingId] = useState(null);
   const pollRef = useRef(null);
 
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useRef(null);
+
   async function load() {
     const result = await apiFetch(`/manual-reports/${id}`);
     setData(result);
@@ -157,6 +160,41 @@ export default function ManualReportDetail() {
     }
   }
 
+  async function uploadImage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setError('Görsel JPG, PNG veya WEBP olmalı ve 8 MB sınırını aşmamalı');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
+    }
+    setUploadingImage(true);
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('image', file);
+      const response = await fetch(`${API}/manual-reports/${id}/images`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('locy_token')}` }, body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Görsel yüklenemedi');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  }
+
+  async function removeImage(imageId) {
+    if (!window.confirm('Bu ekran görüntüsü silinsin mi?')) return;
+    try {
+      await apiFetch(`/manual-reports/${id}/images/${imageId}`, { method: 'DELETE' });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function copyLink() {
     if (!data) return;
     navigator.clipboard?.writeText(`${window.location.origin}/rapor/${data.report.public_token}`);
@@ -168,7 +206,7 @@ export default function ManualReportDetail() {
     return <Layout title="Manuel Rapor"><div className="max-w-6xl mx-auto text-sm text-gray-400">{error || 'Yükleniyor...'}</div></Layout>;
   }
 
-  const { report, summary, videos } = data;
+  const { report, summary, videos, images = [] } = data;
   const processedCount = summary.videoCount - summary.pendingCount;
 
   return (
@@ -305,6 +343,28 @@ export default function ManualReportDetail() {
             </table>
             {!videos.length && <p className="p-8 text-center text-sm text-gray-400">Henüz video eklenmedi.</p>}
           </div>
+        </section>
+
+        <section className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Ekran Görüntüleri (SS)</h2>
+            <label className="cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50 transition">
+              {uploadingImage ? 'Yükleniyor...' : '+ Görsel Ekle'}
+              <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadImage} disabled={uploadingImage} className="hidden" />
+            </label>
+          </div>
+          {images.length > 0 ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {images.map((img) => (
+                <div key={img.id} className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                  <img src={img.image_url} alt="" className="aspect-video w-full object-cover" />
+                  <button onClick={() => removeImage(img.id)} className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100 hover:bg-black/80">Sil</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400">Henüz ekran görüntüsü eklenmedi. Kanıt/istatistik SS'lerini buraya yükleyebilirsin.</p>
+          )}
         </section>
       </div>
     </Layout>

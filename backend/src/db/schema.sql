@@ -235,3 +235,11 @@ CREATE TABLE IF NOT EXISTS manual_report_video_metrics (
   scraped_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Admin'in elle yüklediği ekran görüntüleri (kanıt/SS) — rapor sonunda gösterilir
+CREATE TABLE IF NOT EXISTS manual_report_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL REFERENCES manual_reports(id),
+  image_url TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+

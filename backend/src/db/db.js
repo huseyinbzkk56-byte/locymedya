@@ -266,6 +266,7 @@ async function runInit() {
     CREATE INDEX IF NOT EXISTS idx_videos_project_id ON videos(project_id);
     CREATE INDEX IF NOT EXISTS idx_manual_report_videos_report_id ON manual_report_videos(report_id);
     CREATE INDEX IF NOT EXISTS idx_manual_report_video_metrics_video ON manual_report_video_metrics(video_id, scraped_at);
+    CREATE INDEX IF NOT EXISTS idx_manual_report_images_report_id ON manual_report_images(report_id);
   `);
 
   // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır
