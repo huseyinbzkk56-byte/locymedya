@@ -61,6 +61,7 @@ app.use('/api/offer-accounts', offerAccountsRoutes);
 app.use('/api/offers', offersRoutes);
 app.use('/api/campaign-reports', campaignReportRoutes);
 app.use('/api/manual-reports', manualReportsRoutes);
+console.log('[debug] manual-reports router mounted, type:', typeof manualReportsRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
