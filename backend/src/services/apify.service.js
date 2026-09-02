@@ -27,7 +27,8 @@ function extractMetrics(item) {
     likes: numberValue(item.likes ?? item.likeCount ?? item.likesCount ?? item.diggCount ?? item.statistics?.diggCount),
     comments: numberValue(item.comments ?? item.commentCount ?? item.commentsCount ?? item.replyCount ?? item.statistics?.commentCount),
     shares: numberValue(item.shares ?? item.shareCount ?? item.retweetCount ?? item.statistics?.shareCount),
-    unavailable: item.isDeleted === true || item.status === 'deleted' || item.error === true
+    // Apify bazı actor'larda içerik yoksa error: "not_found" gibi bir string döndürür (boolean true değil) — her ikisini de yakala
+    unavailable: item.isDeleted === true || item.status === 'deleted' || Boolean(item.error)
   };
 }
 
