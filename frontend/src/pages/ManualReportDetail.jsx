@@ -16,6 +16,12 @@ const STATUS_STYLE = {
 function num(n) {
   return Number(n || 0).toLocaleString('tr-TR');
 }
+function formatCompact(value) {
+  const n = Number(value) || 0;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}M`;
+  if (n >= 1_000) return `${(n / 1_000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}B`;
+  return n.toLocaleString('tr-TR');
+}
 function formatDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -251,6 +257,7 @@ export default function ManualReportDetail() {
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
                 <tr>
+                  <th className="px-4 py-3">Video</th>
                   <th className="px-4 py-3">Sayfa</th>
                   <th className="px-4 py-3">Platform</th>
                   <th className="px-4 py-3 text-right">İzlenme</th>
@@ -264,6 +271,18 @@ export default function ManualReportDetail() {
               <tbody className="divide-y divide-gray-100">
                 {videos.map((v) => (
                   <tr key={v.id} className="transition-colors hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <a href={v.url} target="_blank" rel="noreferrer" className="group relative block h-14 w-14 overflow-hidden rounded-lg bg-gray-100">
+                        {v.thumbnail_url ? (
+                          <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center"><PlatformIcon platform={v.platform} className="h-5 w-5 text-gray-300" /></span>
+                        )}
+                        {v.status === 'success' && (
+                          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1 pb-0.5 pt-3 text-center text-[10px] font-semibold text-white">{formatCompact(v.views)}</span>
+                        )}
+                      </a>
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-900"><a href={v.url} target="_blank" rel="noreferrer" className="hover:underline">@{v.page_name}</a></td>
                     <td className="px-4 py-3 text-gray-500"><span className="inline-flex items-center gap-1.5"><PlatformIcon platform={v.platform} className="h-3.5 w-3.5" />{v.platform === 'instagram' ? 'Instagram' : 'TikTok'}</span></td>
                     <td className="px-4 py-3 text-right font-medium text-gray-900">{v.status === 'success' ? num(v.views) : '—'}</td>
