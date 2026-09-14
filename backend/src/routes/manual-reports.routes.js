@@ -12,6 +12,7 @@ const { uploadBuffer, destroyByUrl } = require('../services/storage.service');
 
 const router = express.Router();
 const VIDEO_PLATFORMS = new Set(['instagram', 'tiktok']);
+const PAYMENT_MODELS = new Set(['per_view', 'per_video']);
 const IMAGE_FETCH_TIMEOUT = 6000;
 const IMAGE_FOLDER = 'locymedya/manual-reports';
 const imageAllowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -357,20 +358,35 @@ router.get('/', async (req, res) => {
   res.json({ reports: withSummary });
 });
 
+function parsePaymentFields(body) {
+  const paymentModel = PAYMENT_MODELS.has(body.paymentModel) ? body.paymentModel : null;
+  const rate = Number(body.paymentRate);
+  const paymentRate = paymentModel && Number.isFinite(rate) && rate >= 0 ? rate : null;
+  return { paymentModel: paymentRate === null ? null : paymentModel, paymentRate };
+}
+
 router.post('/', async (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Proje adı zorunlu' });
+  const { paymentModel, paymentRate } = parsePaymentFields(req.body);
   let token;
   do { token = generateToken(); } while (await db.prepare('SELECT 1 FROM manual_reports WHERE public_token = ?').get(token));
-  const result = await db.prepare('INSERT INTO manual_reports (name, artist_name, song_name, report_date, note, public_token) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(name, req.body.artistName?.trim() || null, req.body.songName?.trim() || null, req.body.reportDate || null, req.body.note?.trim() || null, token);
+  const result = await db.prepare('INSERT INTO manual_reports (name, artist_name, song_name, report_date, note, public_token, payment_model, payment_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(name, req.body.artistName?.trim() || null, req.body.songName?.trim() || null, req.body.reportDate || null, req.body.note?.trim() || null, token, paymentModel, paymentRate);
   res.status(201).json({ report: await db.prepare('SELECT * FROM manual_reports WHERE id = ?').get(result.lastInsertRowid) });
 });
+
+function pageSuggestedAmount(page, report) {
+  if (!report.payment_model || report.payment_rate == null) return null;
+  const base = report.payment_model === 'per_view' ? page.views : page.videoCount;
+  return Math.round(Number(base || 0) * report.payment_rate * 100) / 100;
+}
 
 router.get('/:id', async (req, res) => {
   const report = await db.prepare('SELECT * FROM manual_reports WHERE id = ?').get(req.params.id);
   if (!report) return res.status(404).json({ error: 'Rapor bulunamadı' });
   const summary = await reportTotals(report.id);
+  summary.pages = summary.pages.map((p) => ({ ...p, suggestedAmount: pageSuggestedAmount(p, report) }));
   const videos = await db.prepare(`
     SELECT v.*, latest.views, latest.likes, latest.comments, latest.shares
     FROM manual_report_videos v
@@ -381,14 +397,23 @@ router.get('/:id', async (req, res) => {
     ORDER BY v.created_at DESC, v.id DESC
   `).all(report.id);
   const images = await getReportImages(report.id);
-  res.json({ report, summary, videos, images });
+  const payments = await db.prepare(`
+    SELECT mrp.*, u.display_name, u.username
+    FROM manual_report_payments mrp
+    LEFT JOIN users u ON u.id = mrp.user_id
+    WHERE mrp.report_id = ?
+    ORDER BY mrp.paid_at DESC, mrp.id DESC
+  `).all(report.id);
+  const paidTotal = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  res.json({ report, summary, videos, images, payments, paidTotal });
 });
 
 router.put('/:id', async (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Proje adı zorunlu' });
-  const result = await db.prepare("UPDATE manual_reports SET name = ?, artist_name = ?, song_name = ?, report_date = ?, note = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(name, req.body.artistName?.trim() || null, req.body.songName?.trim() || null, req.body.reportDate || null, req.body.note?.trim() || null, req.params.id);
+  const { paymentModel, paymentRate } = parsePaymentFields(req.body);
+  const result = await db.prepare("UPDATE manual_reports SET name = ?, artist_name = ?, song_name = ?, report_date = ?, note = ?, payment_model = ?, payment_rate = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(name, req.body.artistName?.trim() || null, req.body.songName?.trim() || null, req.body.reportDate || null, req.body.note?.trim() || null, paymentModel, paymentRate, req.params.id);
   if (!result.changes) return res.status(404).json({ error: 'Rapor bulunamadı' });
   res.json({ report: await db.prepare('SELECT * FROM manual_reports WHERE id = ?').get(req.params.id) });
 });
@@ -399,6 +424,7 @@ router.delete('/:id', async (req, res) => {
     await tx.prepare('DELETE FROM manual_report_video_metrics WHERE video_id IN (SELECT id FROM manual_report_videos WHERE report_id = ?)').run(req.params.id);
     await tx.prepare('DELETE FROM manual_report_videos WHERE report_id = ?').run(req.params.id);
     await tx.prepare('DELETE FROM manual_report_images WHERE report_id = ?').run(req.params.id);
+    await tx.prepare('DELETE FROM manual_report_payments WHERE report_id = ?').run(req.params.id);
     return tx.prepare('DELETE FROM manual_reports WHERE id = ?').run(req.params.id);
   });
   if (!result.changes) return res.status(404).json({ error: 'Rapor bulunamadı' });
@@ -420,6 +446,33 @@ router.delete('/:id/images/:imageId', async (req, res) => {
   if (!image) return res.status(404).json({ error: 'Görsel bulunamadı' });
   await db.prepare('DELETE FROM manual_report_images WHERE id = ?').run(req.params.imageId);
   destroyByUrl(image.image_url, IMAGE_FOLDER, 'image').catch(() => {});
+  res.status(204).end();
+});
+
+router.post('/:id/payments', async (req, res) => {
+  const report = await db.prepare('SELECT id FROM manual_reports WHERE id = ?').get(req.params.id);
+  if (!report) return res.status(404).json({ error: 'Rapor bulunamadı' });
+  const pageName = String(req.body.pageName || '').trim();
+  const amount = Number(req.body.amount);
+  if (!pageName) return res.status(400).json({ error: 'Sayfa adı zorunlu' });
+  if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'Geçerli bir tutar girin' });
+  let userId = null;
+  if (req.body.userId) {
+    const user = await db.prepare('SELECT id FROM users WHERE id = ?').get(req.body.userId);
+    if (!user) return res.status(400).json({ error: 'Seçilen hesap bulunamadı' });
+    userId = user.id;
+  }
+  const insert = await db.prepare('INSERT INTO manual_report_payments (report_id, page_name, user_id, amount, note) VALUES (?, ?, ?, ?, ?)')
+    .run(report.id, pageName, userId, amount, req.body.note?.trim() || null);
+  const payment = await db.prepare(`
+    SELECT mrp.*, u.display_name, u.username FROM manual_report_payments mrp LEFT JOIN users u ON u.id = mrp.user_id WHERE mrp.id = ?
+  `).get(insert.lastInsertRowid);
+  res.status(201).json({ payment });
+});
+
+router.delete('/:id/payments/:paymentId', async (req, res) => {
+  const result = await db.prepare('DELETE FROM manual_report_payments WHERE id = ? AND report_id = ?').run(req.params.paymentId, req.params.id);
+  if (!result.changes) return res.status(404).json({ error: 'Ödeme bulunamadı' });
   res.status(204).end();
 });
 

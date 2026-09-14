@@ -44,6 +44,23 @@ export default function InfluencerDashboard() {
           <p className="text-sm text-gray-400">Henüz ödeme kaydı yok.</p>
         )}
       </div>
+
+      {data?.manualPayments?.length > 0 && (
+        <>
+          <h2 className="text-sm font-medium text-gray-500 mb-3 mt-8">Manuel Rapor Ödemelerim</h2>
+          <div className="space-y-2">
+            {data.manualPayments.map((p) => (
+              <div key={p.id} className="border border-gray-100 rounded-lg p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
+                <div>
+                  <p>{p.report_name}{p.note ? ` — ${p.note}` : ''}</p>
+                  <p className="text-xs text-gray-400">{p.paid_at}</p>
+                </div>
+                <span className="font-medium">{p.amount} TL</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Layout>
   );
 }

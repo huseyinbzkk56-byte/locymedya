@@ -243,3 +243,16 @@ CREATE TABLE IF NOT EXISTS manual_report_images (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Manuel rapordaki bir sayfaya yapılan ödeme kaydı. user_id doluysa (kayıtlı rap medyası/influencer
+-- hesabına bağlıysa) o kullanıcının kendi panelinde de görünür — mevcut payments tablosuna dokunmaz.
+CREATE TABLE IF NOT EXISTS manual_report_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL REFERENCES manual_reports(id),
+  page_name TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  amount REAL NOT NULL,
+  note TEXT,
+  paid_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+

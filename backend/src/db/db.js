@@ -124,6 +124,8 @@ async function runInit() {
   await addColumnIfMissing('links', 'screenshot_url', 'TEXT');
   await addColumnIfMissing('links', 'archived', 'INTEGER NOT NULL DEFAULT 0');
   await addColumnIfMissing('links', 'account_id', 'INTEGER REFERENCES offer_accounts(id)');
+  await addColumnIfMissing('manual_reports', 'payment_model', 'TEXT');
+  await addColumnIfMissing('manual_reports', 'payment_rate', 'REAL');
 
   // links.platform CHECK kısıtlaması eski (instagram/tiktok/x) ise genişlet — yeni platformlar (youtube/spotify/facebook/web) eklenebilsin
   const linksSql = await tableSql('links');
@@ -267,6 +269,8 @@ async function runInit() {
     CREATE INDEX IF NOT EXISTS idx_manual_report_videos_report_id ON manual_report_videos(report_id);
     CREATE INDEX IF NOT EXISTS idx_manual_report_video_metrics_video ON manual_report_video_metrics(video_id, scraped_at);
     CREATE INDEX IF NOT EXISTS idx_manual_report_images_report_id ON manual_report_images(report_id);
+    CREATE INDEX IF NOT EXISTS idx_manual_report_payments_report_id ON manual_report_payments(report_id);
+    CREATE INDEX IF NOT EXISTS idx_manual_report_payments_user_id ON manual_report_payments(user_id);
   `);
 
   // İzlenme başına ödeme oranı — tüm izlenme bazlı kazanç hesaplamaları bu tek değeri kullanır

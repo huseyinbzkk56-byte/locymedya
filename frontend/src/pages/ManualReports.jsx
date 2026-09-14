@@ -14,7 +14,7 @@ export default function ManualReports() {
   const navigate = useNavigate();
   const [reports, setReports] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', artistName: '', songName: '', reportDate: '', note: '' });
+  const [form, setForm] = useState({ name: '', artistName: '', songName: '', reportDate: '', note: '', paymentModel: '', paymentRate: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
@@ -96,6 +96,12 @@ export default function ManualReports() {
               <input placeholder="Şarkı adı" value={form.songName} onChange={(e) => setForm({ ...form, songName: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm" />
               <input type="date" value={form.reportDate} onChange={(e) => setForm({ ...form, reportDate: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm" />
               <input placeholder="Not (opsiyonel)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm" />
+              <select value={form.paymentModel} onChange={(e) => setForm({ ...form, paymentModel: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm">
+                <option value="">Ücret modeli yok (opsiyonel)</option>
+                <option value="per_view">İzlenme başı ücret</option>
+                <option value="per_video">Video başı ücret</option>
+              </select>
+              <input type="number" min="0" step="any" disabled={!form.paymentModel} placeholder={form.paymentModel === 'per_view' ? 'İzlenme başı TL (örn. 0.0015)' : 'Video başı TL (örn. 200)'} value={form.paymentRate} onChange={(e) => setForm({ ...form, paymentRate: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400" />
             </div>
             <button disabled={saving} className="mt-3 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition">{saving ? 'Oluşturuluyor...' : 'Rapor Oluştur ve Video Ekle'}</button>
           </form>

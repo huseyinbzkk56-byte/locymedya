@@ -51,6 +51,23 @@ export default function RapMediaDashboard() {
         )}
       </div>
 
+      {data?.manualPayments?.length > 0 && (
+        <>
+          <h2 className="mt-8 text-sm font-medium text-gray-500 mb-3">Manuel Rapor Ödemelerim</h2>
+          <div className="space-y-2">
+            {data.manualPayments.map((p) => (
+              <div key={p.id} className="border border-gray-100 rounded-lg p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
+                <div>
+                  <p>{p.report_name}{p.note ? ` — ${p.note}` : ''}</p>
+                  <p className="text-xs text-gray-400">{p.paid_at}</p>
+                </div>
+                <span className="font-medium">{p.amount} TL</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="mt-8 border border-dashed border-gray-200 rounded-xl p-6 text-sm text-gray-400">
         Instagram/TikTok link ekleme özelliği bir sonraki aşamada bu panele eklenecek.
       </div>

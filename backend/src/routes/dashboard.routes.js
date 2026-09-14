@@ -39,7 +39,7 @@ router.get('/admin', authenticate, requireRole('admin'), async (req, res) => {
 
 router.get('/influencer', authenticate, requireRole('influencer'), async (req, res) => {
   const influencer = await db.prepare('SELECT * FROM influencers WHERE user_id = ?').get(req.user.id);
-  if (!influencer) return res.json({ influencer: null, payments: [], totalThisMonth: 0, totalViews: 0, estimatedEarnings: 0, ratePerView: await getViewPaymentRate() });
+  if (!influencer) return res.json({ influencer: null, payments: [], totalThisMonth: 0, totalViews: 0, estimatedEarnings: 0, ratePerView: await getViewPaymentRate(), manualPayments: [] });
 
   const payments = await db
     .prepare("SELECT * FROM payments WHERE influencer_id = ? AND status = 'paid' ORDER BY paid_at DESC")
@@ -63,12 +63,18 @@ router.get('/influencer', authenticate, requireRole('influencer'), async (req, r
     )
     .get(req.user.id)).total;
 
-  res.json({ influencer, payments, totalThisMonth, totalViews, estimatedEarnings: await calculateEarning(totalViews), ratePerView: await getViewPaymentRate() });
+  const manualPayments = await db.prepare(`
+    SELECT mrp.*, mr.name AS report_name FROM manual_report_payments mrp
+    JOIN manual_reports mr ON mr.id = mrp.report_id
+    WHERE mrp.user_id = ? ORDER BY mrp.paid_at DESC
+  `).all(req.user.id);
+
+  res.json({ influencer, payments, totalThisMonth, totalViews, estimatedEarnings: await calculateEarning(totalViews), ratePerView: await getViewPaymentRate(), manualPayments });
 });
 
 router.get('/rapmedia', authenticate, requireRole('rapmedia'), async (req, res) => {
   const account = await db.prepare('SELECT * FROM media_accounts WHERE user_id = ?').get(req.user.id);
-  if (!account) return res.json({ account: null, projects: [], payments: [], totalThisMonth: 0 });
+  if (!account) return res.json({ account: null, projects: [], payments: [], totalThisMonth: 0, manualPayments: [] });
 
   const projects = await db
     .prepare(
@@ -90,7 +96,13 @@ router.get('/rapmedia', authenticate, requireRole('rapmedia'), async (req, res) 
     )
     .get(account.id)).c;
 
-  res.json({ account, projects, payments, totalThisMonth });
+  const manualPayments = await db.prepare(`
+    SELECT mrp.*, mr.name AS report_name FROM manual_report_payments mrp
+    JOIN manual_reports mr ON mr.id = mrp.report_id
+    WHERE mrp.user_id = ? ORDER BY mrp.paid_at DESC
+  `).all(req.user.id);
+
+  res.json({ account, projects, payments, totalThisMonth, manualPayments });
 });
 
 module.exports = router;

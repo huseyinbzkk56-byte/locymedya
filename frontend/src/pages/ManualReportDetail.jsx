@@ -48,6 +48,26 @@ export default function ManualReportDetail() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef(null);
 
+  const [payableUsers, setPayableUsers] = useState([]);
+  const [editingPaymentSettings, setEditingPaymentSettings] = useState(false);
+  const [paymentSettingsForm, setPaymentSettingsForm] = useState({ paymentModel: '', paymentRate: '' });
+  const [savingPaymentSettings, setSavingPaymentSettings] = useState(false);
+  const [payingPage, setPayingPage] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({ userId: '', amount: '', note: '' });
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  useEffect(() => {
+    Promise.all([apiFetch('/admin-members/rap-media'), apiFetch('/admin-members/influencers')])
+      .then(([rapMedia, influencers]) => {
+        const merged = [
+          ...rapMedia.users.map((u) => ({ id: u.user_id, label: `${u.display_name || u.name} (Rap Medyası)` })),
+          ...influencers.users.map((u) => ({ id: u.user_id, label: `${u.display_name || u.name} (Influencer)` }))
+        ];
+        setPayableUsers(merged);
+      })
+      .catch(() => {});
+  }, []);
+
   async function load() {
     const result = await apiFetch(`/manual-reports/${id}`);
     setData(result);
@@ -195,6 +215,71 @@ export default function ManualReportDetail() {
     }
   }
 
+  function openPaymentSettings() {
+    setPaymentSettingsForm({ paymentModel: data.report.payment_model || '', paymentRate: data.report.payment_rate ?? '' });
+    setEditingPaymentSettings(true);
+  }
+
+  async function savePaymentSettings(event) {
+    event.preventDefault();
+    setSavingPaymentSettings(true);
+    setError('');
+    try {
+      const { report } = data;
+      await apiFetch(`/manual-reports/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: report.name,
+          artistName: report.artist_name,
+          songName: report.song_name,
+          reportDate: report.report_date,
+          note: report.note,
+          paymentModel: paymentSettingsForm.paymentModel,
+          paymentRate: paymentSettingsForm.paymentRate
+        })
+      });
+      setEditingPaymentSettings(false);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingPaymentSettings(false);
+    }
+  }
+
+  function openPayForm(page) {
+    setPayingPage(page.pageName);
+    setPaymentForm({ userId: '', amount: page.suggestedAmount ?? '', note: '' });
+  }
+
+  async function submitPayment(event) {
+    event.preventDefault();
+    setSavingPayment(true);
+    setError('');
+    try {
+      await apiFetch(`/manual-reports/${id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({ pageName: payingPage, userId: paymentForm.userId || null, amount: paymentForm.amount, note: paymentForm.note })
+      });
+      setPayingPage(null);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingPayment(false);
+    }
+  }
+
+  async function removePayment(paymentId) {
+    if (!window.confirm('Bu ödeme kaydı silinsin mi?')) return;
+    try {
+      await apiFetch(`/manual-reports/${id}/payments/${paymentId}`, { method: 'DELETE' });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function copyLink() {
     if (!data) return;
     navigator.clipboard?.writeText(`${window.location.origin}/rapor/${data.report.public_token}`);
@@ -206,7 +291,8 @@ export default function ManualReportDetail() {
     return <Layout title="Manuel Rapor"><div className="max-w-6xl mx-auto text-sm text-gray-400">{error || 'Yükleniyor...'}</div></Layout>;
   }
 
-  const { report, summary, videos, images = [] } = data;
+  const { report, summary, videos, images = [], payments = [], paidTotal = 0 } = data;
+  const paymentModelLabel = { per_view: 'İzlenme başı', per_video: 'Video başı' };
   const processedCount = summary.videoCount - summary.pendingCount;
 
   return (
@@ -227,6 +313,35 @@ export default function ManualReportDetail() {
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          {editingPaymentSettings ? (
+            <form onSubmit={savePaymentSettings} className="flex flex-wrap items-end gap-2.5">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Ücret modeli</label>
+                <select value={paymentSettingsForm.paymentModel} onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymentModel: e.target.value })} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <option value="">Yok</option>
+                  <option value="per_view">İzlenme başı ücret</option>
+                  <option value="per_video">Video başı ücret</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tutar (TL)</label>
+                <input type="number" min="0" step="any" disabled={!paymentSettingsForm.paymentModel} value={paymentSettingsForm.paymentRate} onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymentRate: e.target.value })} className="w-36 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm disabled:bg-gray-100" />
+              </div>
+              <button disabled={savingPaymentSettings} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition">{savingPaymentSettings ? 'Kaydediliyor...' : 'Kaydet'}</button>
+              <button type="button" onClick={() => setEditingPaymentSettings(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 transition">Vazgeç</button>
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-gray-600">
+                <span className="font-medium text-gray-900">Ücret modeli:</span>{' '}
+                {report.payment_model ? `${paymentModelLabel[report.payment_model]} — ${report.payment_rate} TL` : 'Belirlenmedi'}
+              </p>
+              <button onClick={openPaymentSettings} className="text-xs font-medium text-gray-500 hover:text-gray-900">Düzenle</button>
+            </div>
+          )}
+        </div>
+
         {summary.pendingCount > 0 && (
           <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700">
             {summary.videoCount} videodan {processedCount}'i işlendi... (otomatik güncelleniyor)
@@ -246,11 +361,67 @@ export default function ManualReportDetail() {
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {summary.pages.map((page) => (
                 <div key={page.pageName} className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="font-medium text-gray-900">@{page.pageName}</p>
-                  <p className="mt-1 text-sm text-gray-500">{page.videoCount} video</p>
-                  <p className="mt-0.5 text-sm font-semibold text-gray-900">{num(page.views)} görüntülenme</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-gray-900">@{page.pageName}</p>
+                      <p className="mt-1 text-sm text-gray-500">{page.videoCount} video</p>
+                      <p className="mt-0.5 text-sm font-semibold text-gray-900">{num(page.views)} görüntülenme</p>
+                      {page.suggestedAmount !== null && <p className="mt-1 text-xs text-emerald-600">Önerilen ödeme: {page.suggestedAmount} TL</p>}
+                    </div>
+                    <button onClick={() => openPayForm(page)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-gray-50 transition">Öde</button>
+                  </div>
+                  {payingPage === page.pageName && (
+                    <form onSubmit={submitPayment} className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                      <select value={paymentForm.userId} onChange={(e) => setPaymentForm({ ...paymentForm, userId: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs">
+                        <option value="">Bağlı hesap yok</option>
+                        {payableUsers.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                      </select>
+                      <input required type="number" min="0" step="any" placeholder="Tutar (TL)" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs" />
+                      <input placeholder="Not (opsiyonel)" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs" />
+                      <div className="flex gap-2">
+                        <button disabled={savingPayment} className="flex-1 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition">{savingPayment ? 'Kaydediliyor...' : 'Ödemeyi Kaydet'}</button>
+                        <button type="button" onClick={() => setPayingPage(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs hover:bg-gray-50 transition">Vazgeç</button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {(report.payment_model || payments.length > 0) && (
+          <section className="mt-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Ödemeler</h2>
+              <p className="text-sm font-semibold text-gray-900">Toplam: {paidTotal} TL</p>
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+              <table className="min-w-full divide-y divide-gray-100 text-sm">
+                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                  <tr>
+                    <th className="px-4 py-3">Sayfa</th>
+                    <th className="px-4 py-3">Hesap</th>
+                    <th className="px-4 py-3 text-right">Tutar</th>
+                    <th className="px-4 py-3">Not</th>
+                    <th className="px-4 py-3">Tarih</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {payments.map((p) => (
+                    <tr key={p.id} className="transition-colors hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">@{p.page_name}</td>
+                      <td className="px-4 py-3 text-gray-500">{p.display_name || p.username || '—'}</td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">{p.amount} TL</td>
+                      <td className="px-4 py-3 text-gray-500">{p.note || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{formatDate(p.paid_at)}</td>
+                      <td className="px-4 py-3"><button onClick={() => removePayment(p.id)} className="text-xs text-red-500 hover:text-red-700">Sil</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!payments.length && <p className="p-8 text-center text-sm text-gray-400">Henüz ödeme kaydedilmedi.</p>}
             </div>
           </section>
         )}
