@@ -74,7 +74,7 @@ async function getClientSafeItems(offerId) {
 
 async function getOfferItemsAdmin(offerId) {
   const rows = await db.prepare(
-    `SELECT oli.id AS item_id, oli.client_price, oli.sort_order, oa.*
+    `SELECT oli.id AS item_id, oli.client_price, oli.normal_price AS item_normal_price, oli.sort_order, oa.*
      FROM offer_list_items oli
      JOIN offer_accounts oa ON oa.id = oli.media_account_id
      WHERE oli.offer_id = ?
@@ -87,9 +87,10 @@ async function getOfferItemsAdmin(offerId) {
     name: row.name,
     category: row.category,
     clientPrice: row.client_price,
+    // Eski kalemlerde normal_price hiç girilmemiş olabilir — o zaman kataloğun genel fiyatına düş
+    normalPrice: row.item_normal_price ?? totalNormalPrice(row),
     sortOrder: row.sort_order,
     followers: totalFollowers(row),
-    normalPrice: totalNormalPrice(row),
     ...shapeAccountPlatforms(row)
   }));
 }
@@ -288,11 +289,13 @@ router.post('/:id/items', async (req, res) => {
 
   const clientPrice = req.body.clientPrice !== undefined ? Number(req.body.clientPrice) : defaultClientPrice(account);
   if (!Number.isFinite(clientPrice) || clientPrice < 0) return res.status(400).json({ error: 'Müşteri fiyatı geçerli bir değer olmalı' });
+  const normalPrice = req.body.normalPrice !== undefined ? Number(req.body.normalPrice) : totalNormalPrice(account);
+  if (!Number.isFinite(normalPrice) || normalPrice < 0) return res.status(400).json({ error: 'Normal fiyat geçerli bir değer olmalı' });
 
   const maxOrder = (await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max FROM offer_list_items WHERE offer_id = ?').get(offer.id)).max;
   const result = await db.prepare(
-    'INSERT INTO offer_list_items (offer_id, media_account_id, client_price, sort_order) VALUES (?, ?, ?, ?)'
-  ).run(offer.id, mediaAccountId, clientPrice, maxOrder + 1);
+    'INSERT INTO offer_list_items (offer_id, media_account_id, client_price, normal_price, sort_order) VALUES (?, ?, ?, ?, ?)'
+  ).run(offer.id, mediaAccountId, clientPrice, normalPrice, maxOrder + 1);
 
   await db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(offer.id);
   res.status(201).json({ items: await getOfferItemsAdmin(offer.id), itemId: result.lastInsertRowid });
@@ -303,10 +306,12 @@ router.put('/:id/items/:itemId', async (req, res) => {
   if (!item) return res.status(404).json({ error: 'Kalem bulunamadı' });
 
   const clientPrice = req.body.clientPrice !== undefined ? Number(req.body.clientPrice) : item.client_price;
+  const normalPrice = req.body.normalPrice !== undefined ? Number(req.body.normalPrice) : item.normal_price;
   const sortOrder = req.body.sortOrder !== undefined ? Number(req.body.sortOrder) : item.sort_order;
   if (!Number.isFinite(clientPrice) || clientPrice < 0) return res.status(400).json({ error: 'Müşteri fiyatı geçerli bir değer olmalı' });
+  if (!Number.isFinite(normalPrice) || normalPrice < 0) return res.status(400).json({ error: 'Normal fiyat geçerli bir değer olmalı' });
 
-  await db.prepare('UPDATE offer_list_items SET client_price = ?, sort_order = ? WHERE id = ?').run(clientPrice, sortOrder, item.id);
+  await db.prepare('UPDATE offer_list_items SET client_price = ?, normal_price = ?, sort_order = ? WHERE id = ?').run(clientPrice, normalPrice, sortOrder, item.id);
   await db.prepare("UPDATE offer_lists SET updated_at = datetime('now') WHERE id = ?").run(req.params.id);
   res.json({ items: await getOfferItemsAdmin(req.params.id) });
 });

@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS offer_list_items (
   offer_id INTEGER NOT NULL REFERENCES offer_lists(id) ON DELETE CASCADE,
   media_account_id INTEGER NOT NULL REFERENCES offer_accounts(id),
   client_price REAL NOT NULL,
+  normal_price REAL,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );

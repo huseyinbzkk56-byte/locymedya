@@ -26,6 +26,7 @@ export default function OfferDetail() {
   const [platform, setPlatform] = useState('');
   const [results, setResults] = useState([]);
   const [priceDrafts, setPriceDrafts] = useState({});
+  const [normalPriceDrafts, setNormalPriceDrafts] = useState({});
 
   async function load() {
     const data = await apiFetch(`/offers/${id}`);
@@ -74,6 +75,18 @@ export default function OfferDetail() {
       const data = await apiFetch(`/offers/${id}/items/${itemId}`, { method: 'PUT', body: JSON.stringify({ clientPrice: Number(value) }) });
       setItems(data.items);
       setPriceDrafts((current) => { const next = { ...current }; delete next[itemId]; return next; });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function updateItemNormalPrice(itemId) {
+    const value = normalPriceDrafts[itemId];
+    if (value === undefined) return;
+    try {
+      const data = await apiFetch(`/offers/${id}/items/${itemId}`, { method: 'PUT', body: JSON.stringify({ normalPrice: Number(value) }) });
+      setItems(data.items);
+      setNormalPriceDrafts((current) => { const next = { ...current }; delete next[itemId]; return next; });
     } catch (err) {
       setError(err.message);
     }
@@ -182,10 +195,15 @@ export default function OfferDetail() {
                       {item.tiktok && <PlatformBadge icon={<TikTokIcon className="text-slate-700" />} followers={item.tiktok.followers} />}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">{Number(item.normalPrice).toLocaleString('tr-TR')} TL</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <input type="number" min="0" step="0.01" value={priceDrafts[item.id] ?? item.clientPrice} onChange={(e) => setPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+                      <input type="number" min="0" step="any" value={normalPriceDrafts[item.id] ?? item.normalPrice} onChange={(e) => setNormalPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-500" />
+                      {normalPriceDrafts[item.id] !== undefined && normalPriceDrafts[item.id] != item.normalPrice && <button onClick={() => updateItemNormalPrice(item.id)} className="text-xs font-medium text-gray-900 hover:underline">Kaydet</button>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="0" step="any" value={priceDrafts[item.id] ?? item.clientPrice} onChange={(e) => setPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
                       {priceDrafts[item.id] !== undefined && priceDrafts[item.id] != item.clientPrice && <button onClick={() => updateItemPrice(item.id)} className="text-xs font-medium text-gray-900 hover:underline">Kaydet</button>}
                     </div>
                   </td>
