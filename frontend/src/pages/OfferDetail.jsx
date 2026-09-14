@@ -27,6 +27,7 @@ export default function OfferDetail() {
   const [results, setResults] = useState([]);
   const [priceDrafts, setPriceDrafts] = useState({});
   const [normalPriceDrafts, setNormalPriceDrafts] = useState({});
+  const [addPriceDrafts, setAddPriceDrafts] = useState({});
 
   async function load() {
     const data = await apiFetch(`/offers/${id}`);
@@ -59,10 +60,14 @@ export default function OfferDetail() {
     }
   }
 
-  async function addAccount(accountId) {
+  async function addAccount(accountId, defaults) {
+    const draft = addPriceDrafts[accountId] || {};
+    const normalPrice = draft.normalPrice !== undefined ? draft.normalPrice : defaults.normalPrice;
+    const clientPrice = draft.clientPrice !== undefined ? draft.clientPrice : defaults.clientPrice;
     try {
-      const data = await apiFetch(`/offers/${id}/items`, { method: 'POST', body: JSON.stringify({ mediaAccountId: accountId }) });
+      const data = await apiFetch(`/offers/${id}/items`, { method: 'POST', body: JSON.stringify({ mediaAccountId: accountId, normalPrice: Number(normalPrice), clientPrice: Number(clientPrice) }) });
       setItems(data.items);
+      setAddPriceDrafts((current) => { const next = { ...current }; delete next[accountId]; return next; });
     } catch (err) {
       setError(err.message);
     }
@@ -233,18 +238,29 @@ export default function OfferDetail() {
         </div>
         <div className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
           {addableResults.map((account) => {
-            const defaultPrice = (account.instagram_client_price || 0) + (account.tiktok_client_price || 0);
+            const defaults = {
+              normalPrice: (account.instagram_normal_price || 0) + (account.tiktok_normal_price || 0),
+              clientPrice: (account.instagram_client_price || 0) + (account.tiktok_client_price || 0)
+            };
+            const draft = addPriceDrafts[account.id] || {};
             return (
-              <div key={account.id} className="flex items-center justify-between gap-3 p-3.5">
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-gray-900">{account.name} <span className="ml-1 text-xs font-normal text-gray-400">{CATEGORY_LABEL[account.category]}</span></p>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                     {account.instagram_url && <PlatformBadge icon={<InstagramIcon className="text-pink-500" />} followers={account.instagram_followers} />}
                     {account.tiktok_url && <PlatformBadge icon={<TikTokIcon className="text-slate-700" />} followers={account.tiktok_followers} />}
-                    <span>Müşteri fiyatı: <span className="font-medium text-gray-900">{defaultPrice.toLocaleString('tr-TR')} TL</span></span>
                   </div>
                 </div>
-                <button onClick={() => addAccount(account.id)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-900 hover:text-white transition">EKLE</button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs text-gray-500">Normal
+                    <input type="number" min="0" step="any" value={draft.normalPrice ?? defaults.normalPrice} onChange={(e) => setAddPriceDrafts((current) => ({ ...current, [account.id]: { ...current[account.id], normalPrice: e.target.value } }))} className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-gray-500">Müşteri
+                    <input type="number" min="0" step="any" value={draft.clientPrice ?? defaults.clientPrice} onChange={(e) => setAddPriceDrafts((current) => ({ ...current, [account.id]: { ...current[account.id], clientPrice: e.target.value } }))} className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+                  </label>
+                  <button onClick={() => addAccount(account.id, defaults)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-900 hover:text-white transition">EKLE</button>
+                </div>
               </div>
             );
           })}
